@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEmail, IsEnum } from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsEnum, IsNumber, IsBoolean } from 'class-validator';
 import { Role } from '../../auth/enums/role.enum'; // adapte le chemin
 
 export class UpdateUserDto {
@@ -19,16 +19,12 @@ export class UpdateUserDto {
   role?: Role;
 
   @IsOptional()
-  @IsString()
-  departement?: string; // adapte selon le vrai nom du champ
+  @IsBoolean()
+  status?: boolean; // si tu as un champ status
 
   @IsOptional()
-  @IsString()
-  status?: string; // si tu as un champ status
-
-  @IsOptional()
-  @IsString()
-  departementId?: string;
+  @IsNumber()
+  departementId?: number;
 
   // Ajoute ici tous les autres champs que tu veux pouvoir modifier
 }

@@ -23,10 +23,17 @@ import { User } from './users/entities/user.entity';
     }),
   
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        ...configService.get('database'),
+      useFactory: (configService: ConfigService) =>({
+        type: 'mysql',
+        host: configService.get('DB_HOST') || 'sakura.proxy.rlwy.net',
+        port: Number(configService.get('DB_PORT') || 13002),
+        username: configService.get('DB_USERNAME') || 'root',
+        password: configService.get('DB_PASSWORD') || '',
+        database: configService.get('DB_DATABASE') || 'railway',
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        synchronize: true,
+        retryAttempts: 3,
       }),
     }),
 

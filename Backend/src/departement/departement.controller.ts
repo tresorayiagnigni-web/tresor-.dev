@@ -9,6 +9,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
 import { AssignChefDto } from './dto/assign-chef.dto';
 import { NOMEM } from 'dns';
+import { id } from 'node_modules/date-fns/locale/id';
 
 @Controller('departments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,41 +30,43 @@ export class DepartmentController {
   @Get()
   @UseGuards(JwtAuthGuard)
   @Roles( Role.ADMIN )
-  findAll() {
+  async findAll() {
     return this.departmentService.findAll();
   }
 
-  @Get(':nom_departement')
+  @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles( Role.ADMIN)
-  findOne(@Param('nom_departement') nom_departement: string) {
-    return this.departmentService.findOne(nom_departement);
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+
+    console.log('Incoming request to findOne');
+    return this.departmentService.findOne(id);
   }
 
-  @Put(':id')
+  @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  update(
-    @Param('nom_departement') nom_departement: string,
-    @Body() updateDepartmentDto: UpdateDepartmentDto,
-  ) {
-    return this.departmentService.update(nom_departement, updateDepartmentDto);
-  }
+  async update(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() updateDepartmentDto: UpdateDepartmentDto,
+) {
+  return this.departmentService.update(id, updateDepartmentDto);
+}
 
   @Patch(':id/chef')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles( Role.ADMIN)
   async assignchefDepartement(
-    @Param('nom_departement') nom_departement: string,
-    @Body('nom') nom: string,
-  ) {
-    return this.departmentService.assignChef(nom_departement, nom);
-  }
+  @Param('id', ParseIntPipe) departementId: number,
+  @Body('chef_DepartementId', ParseIntPipe) chef_DepartementId: number,
+) {
+  return this.departmentService.assignChef(departementId, chef_DepartementId);
+}
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  remove(@Param('nom_departement') nom_departement: string) {
-    return this.departmentService.remove(nom_departement);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.departmentService.remove(id);
   }
 }

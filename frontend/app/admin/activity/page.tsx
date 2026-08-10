@@ -2,18 +2,9 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AppLayout } from '@/app/layout/AppLayout';
 import {
-  Home,
-  Users,
-  User,
-  LogOut,
-  Bell,
-  Briefcase,
-  Menu,
-  X,
-  ChevronRight,
   Building,
   Mail,
   Activity,
@@ -22,7 +13,6 @@ import {
   AlertCircle,
   Calendar,
   Search,
-  Filter,
   Database,
   UserCheck,
   UserPlus,
@@ -31,262 +21,142 @@ import {
   DollarSign,
   CalendarDays,
   ListChecks,
-  TrendingUp,
-  BarChart,
-  PieChart,
-  RefreshCw,
   Plus,
   Edit,
   Trash2,
-  Globe,
-  Shield,
-  Timer,
-  BookOpen,
-  Award,
+  User,
 } from 'lucide-react';
+import { getTasks, type Task, type TaskStatus } from '@/lib/actions/taskActions';
+import { getUsers, type User as ApiUser } from '@/lib/actions/userActions';
+import { getDepartments, type Department } from '@/lib/actions/departmentActions';
 
 // ========== TYPE DEFINITIONS ==========
-type TaskStatus = 'pending' | 'in-progress' | 'completed';
-type RequestStatus = 'pending' | 'approved' | 'rejected';
-type RequestType = 'leave' | 'salary-advance';
 type ActivityType = 'task-created' | 'task-completed' | 'task-assigned' | 'account-removed' | 'user-created' | 'request-approved' | 'request-rejected';
-
-interface GlobalTask {
-  id: string;
-  title: string;
-  department: string;
-  assignedPersonnel: string;
-  dueDate: string;
-  status: TaskStatus;
-  priority: 'low' | 'medium' | 'high';
-}
 
 interface ActivityLog {
   id: string;
   type: ActivityType;
   description: string;
   timestamp: string;
-  icon: React.ReactNode;
 }
-
-interface EmployeeRequest {
-  id: string;
-  employeeName: string;
-  department: string;
-  type: RequestType;
-  details: string;
-  status: RequestStatus;
-  date: string;
-}
-
-// ========== MOCK DATA ==========
-const MOCK_TASKS: GlobalTask[] = [
-  {
-    id: 't1',
-    title: 'Q2 Performance Review Preparation',
-    department: 'IT Architecture',
-    assignedPersonnel: 'John Doe',
-    dueDate: '2026-03-25',
-    status: 'in-progress',
-    priority: 'high',
-  },
-  {
-    id: 't2',
-    title: 'IT Infrastructure Security Audit',
-    department: 'IT Architecture',
-    assignedPersonnel: 'Sarah Chen',
-    dueDate: '2026-03-28',
-    status: 'pending',
-    priority: 'high',
-  },
-  {
-    id: 't3',
-    title: 'Employee Onboarding Documentation',
-    department: 'Human Resources',
-    assignedPersonnel: 'Michael Brown',
-    dueDate: '2026-04-01',
-    status: 'completed',
-    priority: 'medium',
-  },
-  {
-    id: 't4',
-    title: 'Department Budget Review',
-    department: 'Finance',
-    assignedPersonnel: 'Emma Wilson',
-    dueDate: '2026-03-20',
-    status: 'in-progress',
-    priority: 'high',
-  },
-  {
-    id: 't5',
-    title: 'Team Building Workshop Planning',
-    department: 'Human Resources',
-    assignedPersonnel: 'Unassigned',
-    dueDate: '2026-04-05',
-    status: 'pending',
-    priority: 'low',
-  },
-  {
-    id: 't6',
-    title: 'Software License Renewal',
-    department: 'IT Architecture',
-    assignedPersonnel: 'Anna Kim',
-    dueDate: '2026-03-30',
-    status: 'in-progress',
-    priority: 'medium',
-  },
-  {
-    id: 't7',
-    title: 'Payroll System Integration',
-    department: 'Finance',
-    assignedPersonnel: 'Mark Wilson',
-    dueDate: '2026-04-10',
-    status: 'pending',
-    priority: 'medium',
-  },
-  {
-    id: 't8',
-    title: 'Supply Chain Optimization',
-    department: 'Logistics',
-    assignedPersonnel: 'Unassigned',
-    dueDate: '2026-04-15',
-    status: 'pending',
-    priority: 'low',
-  },
-];
-
-const MOCK_ACTIVITIES: ActivityLog[] = [
-  {
-    id: 'a1',
-    type: 'task-created',
-    description: "HOD Dr. Sarah Taylor created task 'API Redesign' for IT Architecture",
-    timestamp: '2026-03-18T10:30:00',
-    icon: <Plus size={16} />,
-  },
-  {
-    id: 'a2',
-    type: 'task-completed',
-    description: "Employee John Doe marked task 'UI Review' as Completed",
-    timestamp: '2026-03-18T09:15:00',
-    icon: <CheckCircle size={16} />,
-  },
-  {
-    id: 'a3',
-    type: 'task-assigned',
-    description: "HOD Alice Smith assigned task 'Database Migration' to Employee Bob Jones",
-    timestamp: '2026-03-17T16:45:00',
-    icon: <UserPlus size={16} />,
-  },
-  {
-    id: 'a4',
-    type: 'account-removed',
-    description: "Admin removed employee account ID 402",
-    timestamp: '2026-03-17T14:20:00',
-    icon: <UserX size={16} />,
-  },
-  {
-    id: 'a5',
-    type: 'task-created',
-    description: "HOD Robert Johnson created task 'Quarterly Financial Report' for Finance",
-    timestamp: '2026-03-17T11:00:00',
-    icon: <Plus size={16} />,
-  },
-  {
-    id: 'a6',
-    type: 'request-approved',
-    description: "Admin approved leave request for Employee Maria Garcia",
-    timestamp: '2026-03-16T15:30:00',
-    icon: <CheckCircle size={16} />,
-  },
-  {
-    id: 'a7',
-    type: 'task-completed',
-    description: "Employee Sarah Chen marked task 'Security Audit' as Completed",
-    timestamp: '2026-03-16T13:45:00',
-    icon: <CheckCircle size={16} />,
-  },
-  {
-    id: 'a8',
-    type: 'user-created',
-    description: "Admin created new employee account for James Wilson",
-    timestamp: '2026-03-16T10:00:00',
-    icon: <UserPlus size={16} />,
-  },
-];
-
-const MOCK_REQUESTS: EmployeeRequest[] = [
-  {
-    id: 'r1',
-    employeeName: 'John Doe',
-    department: 'IT Architecture',
-    type: 'leave',
-    details: '5 Days Off (Mar 20-24)',
-    status: 'pending',
-    date: '2026-03-10',
-  },
-  {
-    id: 'r2',
-    employeeName: 'Alice Smith',
-    department: 'Human Resources',
-    type: 'salary-advance',
-    details: '$500 Advance',
-    status: 'approved',
-    date: '2026-03-08',
-  },
-  {
-    id: 'r3',
-    employeeName: 'Robert Johnson',
-    department: 'Finance',
-    type: 'leave',
-    details: '2 Days Off (Mar 15-16)',
-    status: 'approved',
-    date: '2026-03-07',
-  },
-  {
-    id: 'r4',
-    employeeName: 'Maria Garcia',
-    department: 'Logistics',
-    type: 'salary-advance',
-    details: '$2,500 Advance',
-    status: 'pending',
-    date: '2026-03-12',
-  },
-  {
-    id: 'r5',
-    employeeName: 'Emma Wilson',
-    department: 'IT Architecture',
-    type: 'leave',
-    details: '3 Days Off (Mar 25-27)',
-    status: 'rejected',
-    date: '2026-03-14',
-  },
-  {
-    id: 'r6',
-    employeeName: 'Michael Brown',
-    department: 'Human Resources',
-    type: 'salary-advance',
-    details: '$1,200 Advance',
-    status: 'pending',
-    date: '2026-03-15',
-  },
-];
 
 // ========== MAIN COMPONENT ==========
 const AdminActivityPage: React.FC = () => {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'in-progress' | 'completed'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedActivityType, setSelectedActivityType] = useState<string>('all');
 
+  // ========== LOAD DATA ==========
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const [taskResult, userResult, deptResult] = await Promise.all([
+        getTasks(),
+        getUsers(),
+        getDepartments(),
+      ]);
+
+      if (taskResult.success && taskResult.data) {
+        setTasks(taskResult.data);
+      }
+      if (userResult.success && userResult.data) {
+        setUsers(userResult.data);
+      }
+      if (deptResult.success && deptResult.data) {
+        setDepartments(deptResult.data);
+      }
+    } catch (err) {
+      setError('Failed to load activity data');
+    }
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   // ========== DERIVED STATE ==========
+  // Map tasks to display format
+  const mappedTasks = tasks.map(task => {
+    const assignedUser = users.find(u => u.id === task.userId);
+    const department = departments.find(d => d.id === assignedUser?.departmentId);
+
+    const statusMap: Record<string, 'pending' | 'in-progress' | 'completed'> = {
+      'A_faire': 'pending',
+      'En_cours': 'in-progress',
+      'Terminer': 'completed',
+    };
+
+    const priorityMap: Record<string, 'low' | 'medium' | 'high'> = {
+      'Bas': 'low',
+      'Moyen': 'medium',
+      'Elevee': 'high',
+    };
+
+    return {
+      id: task.id?.toString() || '',
+      title: task.titre || '',
+      department: department?.nom_departement || assignedUser?.departement || 'Unassigned',
+      assignedPersonnel: assignedUser?.nom || 'Unassigned',
+      dueDate: task.Date_limite || '',
+      status: statusMap[task.status || 'A_faire'] || 'pending',
+      priority: priorityMap[task.priorite || 'Moyen'] || 'medium',
+    };
+  });
+
+  // Generate activity logs from tasks and users
+  const generateActivities = (): ActivityLog[] => {
+    const activities: ActivityLog[] = [];
+
+    // Task creation activities
+    tasks.forEach(task => {
+      if (task.cree_le) {
+        const creator = users.find(u => u.id === task.userId);
+        activities.push({
+          id: `task-created-${task.id}`,
+          type: 'task-created',
+          description: `${creator?.nom || 'Someone'} created task '${task.titre}'`,
+          timestamp: task.cree_le,
+        });
+      }
+    });
+
+    // User creation activities (based on users array)
+    users.forEach(user => {
+      if (user.createdAt) {
+        activities.push({
+          id: `user-created-${user.id}`,
+          type: 'user-created',
+          description: `User account created for ${user.nom}`,
+          timestamp: user.createdAt,
+        });
+      }
+    });
+
+    // Sort by timestamp descending (newest first)
+    return activities.sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  };
+
+  const allActivities = generateActivities();
+
+  // ===== FILTERED STATE =====
   const filteredTasks = useMemo(() => {
-    let filtered = MOCK_TASKS;
+    let filtered = mappedTasks;
     
-    // Apply status filter
     if (taskFilter !== 'all') {
       filtered = filtered.filter(task => task.status === taskFilter);
     }
     
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(task =>
@@ -297,15 +167,15 @@ const AdminActivityPage: React.FC = () => {
     }
     
     return filtered;
-  }, [taskFilter, searchQuery]);
+  }, [mappedTasks, taskFilter, searchQuery]);
 
   const filteredActivities = useMemo(() => {
-    if (selectedActivityType === 'all') return MOCK_ACTIVITIES;
-    return MOCK_ACTIVITIES.filter(activity => activity.type === selectedActivityType);
-  }, [selectedActivityType]);
+    if (selectedActivityType === 'all') return allActivities;
+    return allActivities.filter(activity => activity.type === selectedActivityType);
+  }, [allActivities, selectedActivityType]);
 
   // ========== HELPER FUNCTIONS ==========
-  const getStatusBadge = (status: TaskStatus | RequestStatus) => {
+  const getStatusBadge = (status: 'pending' | 'in-progress' | 'completed' | 'approved' | 'rejected') => {
     const config = {
       'pending': {
         bg: 'bg-yellow-100',
@@ -339,24 +209,6 @@ const AdminActivityPage: React.FC = () => {
       },
     };
     return config[status];
-  };
-
-  const getRequestTypeBadge = (type: RequestType) => {
-    const config = {
-      'leave': {
-        bg: 'bg-purple-100',
-        text: 'text-purple-800',
-        icon: <CalendarDays size={14} className="mr-1" />,
-        label: 'Leave Request',
-      },
-      'salary-advance': {
-        bg: 'bg-emerald-100',
-        text: 'text-emerald-800',
-        icon: <DollarSign size={14} className="mr-1" />,
-        label: 'Salary Advance',
-      },
-    };
-    return config[type];
   };
 
   const getPriorityBadge = (priority: 'low' | 'medium' | 'high') => {
@@ -420,6 +272,7 @@ const AdminActivityPage: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'No date';
     const date = new Date(dateString);
     const today = new Date();
     const tomorrow = new Date(today);
@@ -439,6 +292,7 @@ const AdminActivityPage: React.FC = () => {
   };
 
   const formatTimestamp = (timestamp: string) => {
+    if (!timestamp) return 'No date';
     const date = new Date(timestamp);
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -456,6 +310,41 @@ const AdminActivityPage: React.FC = () => {
     const inactiveClasses = 'bg-white text-[#1F2937] border border-[#E5E7EB] hover:bg-gray-50';
     return `${baseClasses} ${taskFilter === filter ? activeClasses : inactiveClasses}`;
   };
+
+  // ===== LOADING STATE =====
+  if (isLoading) {
+    return (
+      <AppLayout
+        pageTitle="Global Activity & Operations Tracker"
+        pageSubtitle="Loading activity data..."
+        showCreateButton={false}
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#263A81] mx-auto mb-4"></div>
+            <p className="text-[#6B7280]">Loading activity data...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ===== ERROR STATE =====
+  if (error) {
+    return (
+      <AppLayout
+        pageTitle="Global Activity & Operations Tracker"
+        pageSubtitle="Error loading data"
+        showCreateButton={false}
+      >
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <AlertCircle size={64} className="text-red-500 opacity-50 mb-4" />
+          <h3 className="text-xl font-semibold text-[#1F2937] mb-2">Error Loading Activity</h3>
+          <p className="text-[#6B7280]">{error}</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   // ========== RENDER ==========
   return (
@@ -636,14 +525,14 @@ const AdminActivityPage: React.FC = () => {
                   Completed
                 </button>
                 <button
-                  onClick={() => setSelectedActivityType('account-removed')}
+                  onClick={() => setSelectedActivityType('user-created')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
-                    selectedActivityType === 'account-removed'
-                      ? 'bg-red-600 text-white'
-                      : 'bg-red-50 text-red-700 hover:bg-red-100'
+                    selectedActivityType === 'user-created'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                   }`}
                 >
-                  Removed
+                  Users
                 </button>
               </div>
             </div>
@@ -693,69 +582,98 @@ const AdminActivityPage: React.FC = () => {
           </div>
         </section>
 
-        {/* ===== CENTRALIZED REQUEST PIPELINE ===== */}
+        {/* ===== DEPARTMENT TASK SUMMARY ===== */}
         <section className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
           <div className="p-6 border-b border-[#E5E7EB]">
             <div className="flex items-center gap-3">
-              <FileText size={24} className="text-[#263A81]" />
-              <h2 className="text-xl font-bold text-[#1F2937]">Centralized Request Pipeline</h2>
+              <Building size={24} className="text-[#263A81]" />
+              <h2 className="text-xl font-bold text-[#1F2937]">Department Task Summary</h2>
               <span className="text-sm text-[#6B7280] bg-gray-100 px-3 py-1 rounded-full">
-                {MOCK_REQUESTS.length} requests
+                {departments.length} departments
               </span>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#E5E7EB] bg-gray-50/70">
-                  <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Employee Name</th>
-                  <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Department</th>
-                  <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Request Type</th>
-                  <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Requested Details</th>
-                  <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Approval Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#E5E7EB]">
-                {MOCK_REQUESTS.map((request) => {
-                  const statusConfig = getStatusBadge(request.status);
-                  const typeConfig = getRequestTypeBadge(request.type);
-                  return (
-                    <tr key={request.id} className="hover:bg-gray-50/50 transition duration-150">
-                      <td className="py-3.5 px-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+            {departments.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-[#6B7280]">
+                <Building size={48} className="mx-auto text-[#6B7280] opacity-30 mb-3" />
+                <p className="font-medium">No departments found</p>
+              </div>
+            ) : (
+              departments.map((dept) => {
+                // Get users in this department
+                const deptUsers = users.filter(u => u.departmentId === dept.id);
+                const deptUserIds = deptUsers.map(u => u.id).filter((id): id is number => id !== undefined);
+                
+                // Get tasks for users in this department
+                const deptTasks = tasks.filter(t => t.userId && deptUserIds.includes(t.userId));
+                
+                const pending = deptTasks.filter(t => t.status !== 'Terminer').length;
+                const completed = deptTasks.filter(t => t.status === 'Terminer').length;
+                const total = deptTasks.length;
+
+                return (
+                  <div
+                    key={dept.id}
+                    className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="text-lg font-bold text-[#1F2937]">{dept.nom_departement || 'Unnamed'}</h3>
+                        <p className="text-xs text-[#6B7280]">{deptUserIds.length} employees</p>
+                      </div>
+                      <div className="p-2 bg-[#263A81]/10 rounded-lg">
+                        <Building size={18} className="text-[#263A81]" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Total Tasks</span>
+                        <span className="font-semibold text-[#1F2937]">{total}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Pending</span>
+                        <span className="font-semibold text-amber-600">{pending}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Completed</span>
+                        <span className="font-semibold text-green-600">{completed}</span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    {total > 0 && (
+                      <div className="mt-3 pt-3 border-t border-[#E5E7EB]">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-[#263A81]/10 flex items-center justify-center text-[#263A81] font-semibold text-xs flex-shrink-0">
-                            {request.employeeName.split(' ').map(n => n[0]).join('')}
+                          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-green-500 rounded-full transition-all duration-500"
+                              style={{ width: `${(completed / total) * 100}%` }}
+                            />
                           </div>
-                          <span className="font-medium text-[#1F2937]">{request.employeeName}</span>
+                          <span className="text-xs font-medium text-[#1F2937]">
+                            {Math.round((completed / total) * 100)}%
+                          </span>
                         </div>
-                      </td>
-                      <td className="py-3.5 px-6 text-[#6B7280]">{request.department}</td>
-                      <td className="py-3.5 px-6">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${typeConfig.bg} ${typeConfig.text}`}
-                        >
-                          {typeConfig.icon}
-                          {typeConfig.label}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-6 text-[#1F2937]">{request.details}</td>
-                      <td className="py-3.5 px-6">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${statusConfig.bg} ${statusConfig.text}`}
-                        >
-                          {statusConfig.icon}
-                          {statusConfig.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </section>
       </div>
+
+      <style jsx>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin { animation: spin 1s linear infinite; }
+      `}</style>
     </AppLayout>
   );
 };

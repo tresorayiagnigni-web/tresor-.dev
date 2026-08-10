@@ -30,32 +30,32 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-    // @Post('register')
-    // async register(@Body() createUserdto: CreateUserDto) {
-    //     return this.authService.register(createUserdto);
-    // }
+  @Post('refresh')
+  refresh(@Body('refresh_token') refreshToken: string) {
+    return this.authService.refresh(refreshToken);
+ }
 
-    // @Post('login')
-    // @HttpCode(HttpStatus.OK)
-    // async login(@Body() logindto: LoginDto, @Headers('external-access-token') externalAccessToken: string,) {
-    //  return this.authService.login(logindto);
-    // }
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  logout(@Req() req) {
+    return this.authService.logout(req.user.id); // ou req.user.sub
+ }
 
+  @Get('profile')
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.EMPLOYEE, Role.ADMIN)     // ← Ici
+  getProfile(@GetUser() user) {
+    return user;
+  }
 
-    @Get('profile')
-    @UseGuards(JwtAuthGuard)
-    @Roles(Role.EMPLOYEE, Role.ADMIN)     // ← Ici
-    getProfile(@GetUser() user) {
-        return user;
-    }
-
-    @Post('change-password')
-    @UseGuards(JwtAuthGuard)
-    async changePassword(
-      @Req() req,
-      @Body() dto: ChangePasswordDto,
-    ) {
-       return this.authService.changePassword(req.user.id, dto);
-    }
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  async changePassword(
+    @Req() req,
+    @Body() dto: ChangePasswordDto,
+  ) 
+  {
+    return this.authService.changePassword(req.user.id, dto);
+  }
 
 }

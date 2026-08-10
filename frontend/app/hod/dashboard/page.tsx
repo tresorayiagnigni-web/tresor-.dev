@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HODLayout } from '@/app/layout/HodLayout';
 import {
   CheckSquare,
@@ -16,6 +16,9 @@ import {
   AlertTriangle,
   Plus,
 } from 'lucide-react';
+import { getTasks, type Task, type TaskStatus } from '@/lib/actions/taskActions';
+import { getUsers, type User } from '@/lib/actions/userActions';
+import { getDepartmentById, type Department } from '@/lib/actions/departmentActions';
 
 // ========== TYPE DEFINITIONS ==========
 interface DepartmentTask {
@@ -24,7 +27,7 @@ interface DepartmentTask {
   assignedEmployee: string;
   dueDate: string;
   priority: 'low' | 'medium' | 'high';
-  progress: number; // 0-100
+  progress: number;
 }
 
 interface DepartmentRequest {
@@ -38,66 +41,110 @@ interface DepartmentRequest {
 
 // ========== MAIN COMPONENT ==========
 const HODDashboardPage: React.FC = () => {
-  // ========== MOCK DATA ==========
-  const departmentTasks: DepartmentTask[] = [
-    {
-      id: '1',
-      title: 'Q2 Performance Review Preparation',
-      assignedEmployee: 'John Doe',
-      dueDate: '2026-03-25',
-      priority: 'high',
-      progress: 75,
-    },
-    {
-      id: '2',
-      title: 'IT Infrastructure Security Audit',
-      assignedEmployee: 'Sarah Chen',
-      dueDate: '2026-03-28',
-      priority: 'high',
-      progress: 40,
-    },
-    {
-      id: '3',
-      title: 'Employee Onboarding Documentation',
-      assignedEmployee: 'Michael Brown',
-      dueDate: '2026-04-01',
-      priority: 'medium',
-      progress: 100,
-    },
-    {
-      id: '4',
-      title: 'Department Budget Review',
-      assignedEmployee: 'Emma Wilson',
-      dueDate: '2026-03-20',
-      priority: 'high',
-      progress: 25,
-    },
-    {
-      id: '5',
-      title: 'Team Building Workshop Planning',
-      assignedEmployee: 'James Rodriguez',
-      dueDate: '2026-04-05',
-      priority: 'low',
-      progress: 60,
-    },
-    {
-      id: '6',
-      title: 'Software License Renewal',
-      assignedEmployee: 'Anna Kim',
-      dueDate: '2026-03-30',
-      priority: 'medium',
-      progress: 90,
-    },
-  ];
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [department, setDepartment] = useState<Department | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // HOD user info - In production, this would come from auth context
+  const hodUserId = 1; // Placeholder - should come from auth
+  const hodName = 'Dr. Sarah Taylor';
+  const hodInitials = 'ST';
+  const departmentName = 'IT Architecture';
+
+  // ===== LOAD DATA =====
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Fetch all tasks
+      const taskResult = await getTasks();
+      if (taskResult.success && taskResult.data) {
+        setTasks(taskResult.data);
+      }
+
+      // Fetch all users
+      const userResult = await getUsers();
+      if (userResult.success && userResult.data) {
+        setUsers(userResult.data);
+      }
+
+      // Fetch HOD's department (assuming HOD has departmentId)
+      // In production, get departmentId from HOD's user record
+      const deptResult = await getDepartmentById(1); // Placeholder
+      if (deptResult.success && deptResult.data) {
+        setDepartment(deptResult.data);
+      }
+    } catch (err) {
+      setError('Failed to load dashboard data');
+    }
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // ===== DERIVED STATE =====
+  // Get users in HOD's department
+  const departmentUsers = users.filter(u => u.departmentId === department?.id);
+  const totalEmployees = departmentUsers.length;
+
+  // Get tasks assigned to users in HOD's department
+  const departmentUserIds = departmentUsers.map(u => u.id).filter((id): id is number => id !== undefined);
+  const departmentTasks = tasks.filter(t => t.userId && departmentUserIds.includes(t.userId));
+
+  // Task statistics
+  const pendingTasks = departmentTasks.filter(t => t.status !== 'Terminer').length;
+  const completedTasks = departmentTasks.filter(t => t.status === 'Terminer').length;
+
+  // Tasks due this week
+  const tasksDueThisWeek = departmentTasks.filter(task => {
+    if (!task.Date_limite) return false;
+    const dueDate = new Date(task.Date_limite);
+    const today = new Date();
+    const weekFromNow = new Date(today);
+    weekFromNow.setDate(weekFromNow.getDate() + 7);
+    return dueDate >= today && dueDate <= weekFromNow && task.status !== 'Terminer';
+  }).length;
+
+  // Map tasks to DepartmentTask format
+  const mappedTasks: DepartmentTask[] = departmentTasks.map(task => {
+    const assignedUser = users.find(u => u.id === task.userId);
+    const priorityMap: Record<string, 'low' | 'medium' | 'high'> = {
+      'Bas': 'low',
+      'Moyen': 'medium',
+      'Elevee': 'high',
+    };
+
+    // Calculate progress based on status
+    let progress = 0;
+    if (task.status === 'A_faire') progress = 0;
+    else if (task.status === 'En_cours') progress = 50;
+    else if (task.status === 'Terminer') progress = 100;
+
+    return {
+      id: task.id?.toString() || '',
+      title: task.titre || '',
+      assignedEmployee: assignedUser?.nom || 'Unassigned',
+      dueDate: task.Date_limite || '',
+      priority: priorityMap[task.priorite || 'Moyen'] || 'medium',
+      progress: progress,
+    };
+  });
+
+  // Map requests (using mock data for now - this would come from a request API)
   const departmentRequests: DepartmentRequest[] = [
     {
       id: '1',
       employee: 'John Doe',
       type: 'Leave Request',
-      details: 'Annual leave - 5 days (Mar 20-24)',
+      details: 'Annual leave - 5 days',
       status: 'pending',
-      date: '2026-03-10',
+      date: new Date().toISOString(),
     },
     {
       id: '2',
@@ -105,40 +152,13 @@ const HODDashboardPage: React.FC = () => {
       type: 'Expense Claim',
       details: 'Travel reimbursement - $350',
       status: 'approved',
-      date: '2026-03-08',
-    },
-    {
-      id: '3',
-      employee: 'Robert Johnson',
-      type: 'Leave Request',
-      details: 'Sick leave - 2 days (Mar 15-16)',
-      status: 'approved',
-      date: '2026-03-07',
-    },
-    {
-      id: '4',
-      employee: 'Maria Garcia',
-      type: 'Salary Advance',
-      details: 'Emergency advance - $2,500',
-      status: 'pending',
-      date: '2026-03-12',
+      date: new Date(Date.now() - 86400000 * 2).toISOString(),
     },
   ];
 
-  // ========== DERIVED STATISTICS ==========
-  const totalEmployees = 12;
-  const pendingTasks = departmentTasks.filter(task => task.progress < 100).length;
-  const completedTasks = departmentTasks.filter(task => task.progress === 100).length;
-  const tasksDueThisWeek = departmentTasks.filter(task => {
-    const dueDate = new Date(task.dueDate);
-    const today = new Date();
-    const weekFromNow = new Date(today);
-    weekFromNow.setDate(weekFromNow.getDate() + 7);
-    return dueDate >= today && dueDate <= weekFromNow && task.progress < 100;
-  }).length;
-
   // ========== HANDLERS ==========
   const handleNewTask = () => {
+    // In production, this would open a create task modal
     alert('New Task modal would open here');
   };
 
@@ -192,6 +212,7 @@ const HODDashboardPage: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'No date';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -206,14 +227,55 @@ const HODDashboardPage: React.FC = () => {
     return 'bg-red-500';
   };
 
+  // ===== LOADING STATE =====
+  if (isLoading) {
+    return (
+      <HODLayout
+        pageTitle="Department Dashboard Overview"
+        pageSubtitle="Loading..."
+        departmentName={departmentName}
+        hodName={hodName}
+        hodInitials={hodInitials}
+        showCreateButton={false}
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#263A81] mx-auto mb-4"></div>
+            <p className="text-[#6B7280]">Loading dashboard...</p>
+          </div>
+        </div>
+      </HODLayout>
+    );
+  }
+
+  // ===== ERROR STATE =====
+  if (error) {
+    return (
+      <HODLayout
+        pageTitle="Department Dashboard Overview"
+        pageSubtitle="Error loading data"
+        departmentName={departmentName}
+        hodName={hodName}
+        hodInitials={hodInitials}
+        showCreateButton={false}
+      >
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <AlertCircle size={64} className="text-red-500 opacity-50 mb-4" />
+          <h3 className="text-xl font-semibold text-[#1F2937] mb-2">Error Loading Dashboard</h3>
+          <p className="text-[#6B7280]">{error}</p>
+        </div>
+      </HODLayout>
+    );
+  }
+
   // ========== RENDER ==========
   return (
     <HODLayout
       pageTitle="Department Dashboard Overview"
       pageSubtitle=""
-      departmentName="IT Architecture"
-      hodName="Dr. Sarah Taylor"
-      hodInitials="ST"
+      departmentName={departmentName}
+      hodName={hodName}
+      hodInitials={hodInitials}
       showCreateButton={true}
       onCreateClick={handleNewTask}
       createButtonText="New Task"
@@ -271,7 +333,6 @@ const HODDashboardPage: React.FC = () => {
               <h2 className="text-xl font-bold text-[#1F2937]">Active Department Tasks</h2>
               <p className="text-sm text-[#6B7280] mt-1">Tracking progress across all team members</p>
             </div>
-            {/* New Task button removed from here - now in layout header */}
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -286,38 +347,50 @@ const HODDashboardPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E5E7EB]">
-              {departmentTasks.map((task) => {
-                const priorityConfig = getPriorityBadge(task.priority);
-                const progressColor = getProgressColor(task.progress);
-                return (
-                  <tr key={task.id} className="hover:bg-gray-50/50 transition duration-150">
-                    <td className="py-3.5 px-6 text-[#1F2937] font-medium">{task.title}</td>
-                    <td className="py-3.5 px-6 text-[#6B7280]">{task.assignedEmployee}</td>
-                    <td className="py-3.5 px-6 text-[#6B7280]">{formatDate(task.dueDate)}</td>
-                    <td className="py-3.5 px-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${priorityConfig.bg} ${priorityConfig.text}`}
-                      >
-                        {priorityConfig.icon}
-                        {priorityConfig.label}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden min-w-[60px]">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
-                            style={{ width: `${task.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-medium text-[#1F2937] min-w-[36px]">
-                          {task.progress}%
+              {mappedTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-[#6B7280]">
+                    <div className="flex flex-col items-center gap-2">
+                      <ClipboardList size={48} className="text-[#6B7280] opacity-30" />
+                      <p className="font-medium">No tasks found</p>
+                      <p className="text-sm">No active tasks in your department</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                mappedTasks.map((task) => {
+                  const priorityConfig = getPriorityBadge(task.priority);
+                  const progressColor = getProgressColor(task.progress);
+                  return (
+                    <tr key={task.id} className="hover:bg-gray-50/50 transition duration-150">
+                      <td className="py-3.5 px-6 text-[#1F2937] font-medium">{task.title}</td>
+                      <td className="py-3.5 px-6 text-[#6B7280]">{task.assignedEmployee}</td>
+                      <td className="py-3.5 px-6 text-[#6B7280]">{formatDate(task.dueDate)}</td>
+                      <td className="py-3.5 px-6">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${priorityConfig.bg} ${priorityConfig.text}`}
+                        >
+                          {priorityConfig.icon}
+                          {priorityConfig.label}
                         </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                      <td className="py-3.5 px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden min-w-[60px]">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
+                              style={{ width: `${task.progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium text-[#1F2937] min-w-[36px]">
+                            {task.progress}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -334,31 +407,37 @@ const HODDashboardPage: React.FC = () => {
         </div>
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {departmentRequests.map((request) => {
-              const statusConfig = getStatusBadge(request.status);
-              return (
-                <div
-                  key={request.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#FEFEFC] border border-[#E5E7EB] rounded-lg hover:border-[#263A81]/20 transition-colors gap-3"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-[#1F2937]">{request.employee}</span>
-                      <span className="text-[#6B7280] text-sm">-</span>
-                      <span className="text-sm text-[#6B7280]">{request.type}</span>
-                    </div>
-                    <div className="text-sm text-[#6B7280] truncate mt-0.5">{request.details}</div>
-                    <div className="text-xs text-[#6B7280] mt-1">{formatDate(request.date)}</div>
-                  </div>
-                  <span
-                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap ${statusConfig.bg} ${statusConfig.text}`}
+            {departmentRequests.length === 0 ? (
+              <div className="col-span-full text-center py-8 text-[#6B7280]">
+                <p>No pending requests</p>
+              </div>
+            ) : (
+              departmentRequests.map((request) => {
+                const statusConfig = getStatusBadge(request.status);
+                return (
+                  <div
+                    key={request.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#FEFEFC] border border-[#E5E7EB] rounded-lg hover:border-[#263A81]/20 transition-colors gap-3"
                   >
-                    {statusConfig.icon}
-                    {statusConfig.label}
-                  </span>
-                </div>
-              );
-            })}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-[#1F2937]">{request.employee}</span>
+                        <span className="text-[#6B7280] text-sm">-</span>
+                        <span className="text-sm text-[#6B7280]">{request.type}</span>
+                      </div>
+                      <div className="text-sm text-[#6B7280] truncate mt-0.5">{request.details}</div>
+                      <div className="text-xs text-[#6B7280] mt-1">{formatDate(request.date)}</div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap ${statusConfig.bg} ${statusConfig.text}`}
+                    >
+                      {statusConfig.icon}
+                      {statusConfig.label}
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

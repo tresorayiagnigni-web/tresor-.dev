@@ -1,144 +1,126 @@
+// app/admin/departments/page.tsx
+
 'use client';
 
-import React, { useState } from 'react';
-import { AppLayout } from '../../layout/AppLayout';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { AppLayout } from '@/app/layout/AppLayout';
 import {
-  Users,
-  User,
-  Briefcase,
   Building,
-  Mail,
+  Users,
   UserCog,
-  Eye,
-  Search,
-  Database,
-  Activity,
   UserCheck,
   Clock,
+  Search,
   Plus,
+  Edit,
+  Trash2,
   X,
+  CheckCircle,
+  AlertCircle,
+  Mail,
+  User,
 } from 'lucide-react';
+import { type Department } from '@/lib/actions/departmentActions';
+import { type User as ApiUser } from '@/lib/actions/userActions';
+import {
+  fetchDepartments,
+  fetchUsers,
+  createNewDepartment,
+  updateExistingDepartment,
+  deleteExistingDepartment,
+  assignHOD,
+  showSuccess,
+  formatDate,
+} from '@/lib/helpers/adminHelpers';
 
 // ========== TYPE DEFINITIONS ==========
-interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  jobRole: string;
-  activeTasks: number;
+interface DepartmentFormData {
+  nom_departement: string;
+  description: string;
+  chef_departementId: string;
 }
-
-interface Department {
-  id: string;
-  name: string;
-  code: string;
-  headcount: number;
-  hodName: string;
-  hodEmail: string;
-  hodStatus: 'active' | 'inactive';
-  hodActivityCount: number;
-  operationalFocus: string;
-  employees: Employee[];
-}
-
-// ========== MOCK DATA ==========
-const MOCK_DEPARTMENTS: Department[] = [
-  {
-    id: '1',
-    name: 'IT Architecture',
-    code: 'DEPT-ITA-2026',
-    headcount: 12,
-    hodName: 'Dr. Sarah Taylor',
-    hodEmail: 's.taylor@mendocompany.com',
-    hodStatus: 'active',
-    hodActivityCount: 47,
-    operationalFocus: 'Enterprise infrastructure, cloud solutions, security protocols, and system architecture design.',
-    employees: [
-      { id: 'e1', name: 'John Doe', email: 'john.doe@mendocompany.com', jobRole: 'Senior Software Engineer', activeTasks: 3 },
-      { id: 'e2', name: 'Sarah Chen', email: 'sarah.chen@mendocompany.com', jobRole: 'IT Security Analyst', activeTasks: 2 },
-      { id: 'e3', name: 'Michael Brown', email: 'michael.brown@mendocompany.com', jobRole: 'DevOps Engineer', activeTasks: 4 },
-      { id: 'e4', name: 'Emma Wilson', email: 'emma.wilson@mendocompany.com', jobRole: 'Cloud Solutions Architect', activeTasks: 3 },
-      { id: 'e5', name: 'James Rodriguez', email: 'james.rodriguez@mendocompany.com', jobRole: 'Network Administrator', activeTasks: 2 },
-      { id: 'e6', name: 'Anna Kim', email: 'anna.kim@mendocompany.com', jobRole: 'Software Developer', activeTasks: 1 },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Human Resources',
-    code: 'DEPT-HR-2026',
-    headcount: 8,
-    hodName: 'Alice Smith',
-    hodEmail: 'alice.smith@mendocompany.com',
-    hodStatus: 'active',
-    hodActivityCount: 31,
-    operationalFocus: 'Talent acquisition, employee relations, performance management, and organizational development.',
-    employees: [
-      { id: 'e7', name: 'Robert Johnson', email: 'robert.johnson@mendocompany.com', jobRole: 'HR Generalist', activeTasks: 3 },
-      { id: 'e8', name: 'Maria Garcia', email: 'maria.garcia@mendocompany.com', jobRole: 'Recruitment Specialist', activeTasks: 2 },
-      { id: 'e9', name: 'David Kim', email: 'david.kim@mendocompany.com', jobRole: 'Employee Relations Manager', activeTasks: 1 },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Finance',
-    code: 'DEPT-FIN-2026',
-    headcount: 6,
-    hodName: 'Robert Johnson',
-    hodEmail: 'robert.johnson@mendocompany.com',
-    hodStatus: 'active',
-    hodActivityCount: 23,
-    operationalFocus: 'Financial planning, budgeting, accounting, payroll, and compliance management.',
-    employees: [
-      { id: 'e10', name: 'Lisa Thompson', email: 'lisa.thompson@mendocompany.com', jobRole: 'Senior Accountant', activeTasks: 3 },
-      { id: 'e11', name: 'Mark Wilson', email: 'mark.wilson@mendocompany.com', jobRole: 'Financial Analyst', activeTasks: 2 },
-      { id: 'e12', name: 'Jennifer Lee', email: 'jennifer.lee@mendocompany.com', jobRole: 'Payroll Specialist', activeTasks: 2 },
-    ],
-  },
-  {
-    id: '4',
-    name: 'Logistics',
-    code: 'DEPT-LOG-2026',
-    headcount: 5,
-    hodName: 'Maria Garcia',
-    hodEmail: 'maria.garcia@mendocompany.com',
-    hodStatus: 'inactive',
-    hodActivityCount: 12,
-    operationalFocus: 'Supply chain management, inventory control, distribution, and logistics optimization.',
-    employees: [
-      { id: 'e13', name: 'Thomas Brown', email: 'thomas.brown@mendocompany.com', jobRole: 'Logistics Coordinator', activeTasks: 2 },
-      { id: 'e14', name: 'Patricia Davis', email: 'patricia.davis@mendocompany.com', jobRole: 'Supply Chain Analyst', activeTasks: 1 },
-    ],
-  },
-];
 
 // ========== MAIN COMPONENT ==========
-const AdminDepartmentInspectorPage: React.FC = () => {
-  const [departments, setDepartments] = useState<Department[]>(MOCK_DEPARTMENTS);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>(departments[0]?.id || '');
+const DepartmentsPage: React.FC = () => {
+  const router = useRouter();
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
-  const [showSuccessBanner, setShowSuccessBanner] = useState<boolean>(false);
-  const [successMessage, setSuccessMessage] = useState<string>('');
 
-  // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    hodName: '',
-    hodEmail: '',
-    operationalFocus: '',
+  // Modal states
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
+  const [selectedDepartment, setSelectedDepartment] = useState<Department | null>(null);
+  const [departmentToDelete, setDepartmentToDelete] = useState<Department | null>(null);
+
+  // Form data
+  const [formData, setFormData] = useState<DepartmentFormData>({
+    nom_departement: '',
+    description: '',
+    chef_departementId: '',
   });
 
+  const [editFormData, setEditFormData] = useState<DepartmentFormData>({
+    nom_departement: '',
+    description: '',
+    chef_departementId: '',
+  });
+
+  // ========== LOAD DATA ==========
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const deptResult = await fetchDepartments();
+    if (deptResult.success && deptResult.data) {
+      setDepartments(deptResult.data);
+    } else {
+      setError(deptResult.message || 'Failed to load departments');
+    }
+
+    const userResult = await fetchUsers();
+    if (userResult.success && userResult.data) {
+      setUsers(userResult.data);
+    }
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   // ========== DERIVED STATE ==========
-  const selectedDepartment = departments.find(d => d.id === selectedDepartmentId);
-  const filteredEmployees = selectedDepartment?.employees.filter(emp =>
-    emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.jobRole.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  const filteredDepartments = departments.filter((dept) => {
+    const matchesSearch =
+      (dept.nom_departement || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (dept.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (dept.code || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
+  // Get HOD users (users with role HOD)
+  const hodUsers = users.filter((u) => u.role === 'HOD');
+
+  // Get available HOD users (not already assigned as HOD to another department)
+  const getAvailableHODs = (currentDepartmentId?: number) => {
+    const assignedHODIds = departments
+      .filter((d) => d.id !== currentDepartmentId)
+      .map((d) => d.chef_departementId)
+      .filter((id): id is number => id !== undefined && id !== null);
+
+    return hodUsers.filter((u) => !assignedHODIds.includes(u.id!));
+  };
 
   // ========== HELPER FUNCTIONS ==========
-  const getStatusBadge = (status: 'active' | 'inactive') => {
+  const getStatusBadge = (status: 'active' | 'inactive' | boolean | undefined) => {
+    const isActive = status === true || status === 'active';
     const config = {
       active: {
         bg: 'bg-green-100',
@@ -153,28 +135,25 @@ const AdminDepartmentInspectorPage: React.FC = () => {
         label: 'Inactive',
       },
     };
-    return config[status];
+    return isActive ? config.active : config.inactive;
   };
 
-  const getDepartmentStats = (department: Department) => {
-    const totalActiveTasks = department.employees.reduce((sum, emp) => sum + emp.activeTasks, 0);
-    return { totalActiveTasks };
+  const getHODName = (department: Department) => {
+    if (!department.chef_departementId) return 'Unassigned';
+    const hod = users.find((u) => u.id === department.chef_departementId);
+    return hod?.nom || 'Unknown';
   };
 
-  const showSuccess = (message: string) => {
-    setSuccessMessage(message);
-    setShowSuccessBanner(true);
-    setTimeout(() => setShowSuccessBanner(false), 4000);
+  const getEmployeeCount = (department: Department) => {
+    return users.filter((u) => u.departmentId === department.id).length;
   };
 
-  // ========== CREATE DEPARTMENT HANDLERS ==========
+  // ========== MODAL HANDLERS ==========
   const openCreateModal = () => {
     setFormData({
-      name: '',
-      code: '',
-      hodName: '',
-      hodEmail: '',
-      operationalFocus: '',
+      nom_departement: '',
+      description: '',
+      chef_departementId: '',
     });
     setIsCreateModalOpen(true);
   };
@@ -183,282 +162,297 @@ const AdminDepartmentInspectorPage: React.FC = () => {
     setIsCreateModalOpen(false);
   };
 
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const openEditModal = (department: Department) => {
+    setSelectedDepartment(department);
+    setEditFormData({
+      nom_departement: department.nom_departement || '',
+      description: department.description || '',
+      chef_departementId: department.chef_departementId?.toString() || '',
+    });
+    setIsEditModalOpen(true);
   };
 
-  const handleCreateDepartment = (e: React.FormEvent) => {
+  const closeEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedDepartment(null);
+  };
+
+  const openDeleteModal = (department: Department) => {
+    setDepartmentToDelete(department);
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setDepartmentToDelete(null);
+  };
+
+  const handleCardClick = (departmentId: number) => {
+    router.push(`/admin/department-inspector/${departmentId}`);
+  };
+
+  // ========== CRUD OPERATIONS ==========
+  const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const newDepartment: Department = {
-      id: Date.now().toString(),
-      name: formData.name,
-      code: formData.code || `DEPT-${formData.name.substring(0, 3).toUpperCase()}-${new Date().getFullYear()}`,
-      headcount: 0,
-      hodName: formData.hodName,
-      hodEmail: formData.hodEmail,
-      hodStatus: 'active',
-      hodActivityCount: 0,
-      operationalFocus: formData.operationalFocus,
-      employees: [],
-    };
+    setIsSubmitting(true);
+    setError(null);
 
-    setDepartments([newDepartment, ...departments]);
-    setSelectedDepartmentId(newDepartment.id);
-    showSuccess(`Department "${newDepartment.name}" created successfully!`);
-    closeCreateModal();
+    const result = await createNewDepartment({
+      nom_departement: formData.nom_departement,
+      description: formData.description,
+    });
+
+    if (result.success && result.data) {
+      if (formData.chef_departementId) {
+        const assignResult = await assignHOD(result.data.id!, parseInt(formData.chef_departementId));
+        if (assignResult.success) {
+          showSuccess(setSuccessMessage, `Department created with HOD assigned successfully!`);
+        }
+      } else {
+        showSuccess(setSuccessMessage, `Department ${result.data.nom_departement} created successfully!`);
+      }
+      closeCreateModal();
+      loadData();
+    } else {
+      setError(result.message || 'Failed to create department');
+    }
+    setIsSubmitting(false);
   };
 
-  // ========== JSX RENDER ==========
+  const handleEditDepartment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDepartment) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    const result = await updateExistingDepartment(selectedDepartment.id!, {
+      nom_departement: editFormData.nom_departement,
+      description: editFormData.description,
+    });
+
+    if (result.success && result.data) {
+      const currentHODId = selectedDepartment.chef_departementId;
+      const newHODId = editFormData.chef_departementId ? parseInt(editFormData.chef_departementId) : null;
+
+      if (newHODId !== currentHODId) {
+        if (newHODId) {
+          const assignResult = await assignHOD(selectedDepartment.id!, newHODId);
+          if (assignResult.success) {
+            showSuccess(setSuccessMessage, `Department updated with new HOD assigned!`);
+          }
+        }
+      } else {
+        showSuccess(setSuccessMessage, `Department ${result.data.nom_departement} updated successfully!`);
+      }
+      closeEditModal();
+      loadData();
+    } else {
+      setError(result.message || 'Failed to update department');
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!departmentToDelete) return;
+    setIsSubmitting(true);
+    setError(null);
+
+    const employeeCount = users.filter((u) => u.departmentId === departmentToDelete.id).length;
+    if (employeeCount > 0) {
+      setError(`Cannot delete department with ${employeeCount} assigned users. Please reassign or remove users first.`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await deleteExistingDepartment(departmentToDelete.id!);
+    if (result.success) {
+      showSuccess(setSuccessMessage, `Department ${departmentToDelete.nom_departement} deleted successfully!`);
+      closeDeleteModal();
+      loadData();
+    } else {
+      setError(result.message || 'Failed to delete department');
+    }
+    setIsSubmitting(false);
+  };
+
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setEditFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // ========== RENDER ==========
   return (
     <AppLayout
-      pageTitle="Corporate Architecture & Department Inspector"
-      pageSubtitle="Macro-to-Micro Company Structure Oversight and Departmental Breakdown Exploration"
+      pageTitle="Department Management"
+      pageSubtitle="Create, manage, and organize departments across your organization"
       showCreateButton={true}
       onCreateClick={openCreateModal}
       createButtonText="Create Department"
     >
       {/* Success Banner */}
-      {showSuccessBanner && (
+      {successMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
-          <UserCheck size={20} className="text-green-600" />
+          <CheckCircle size={20} className="text-green-600" />
           <span className="text-green-800 font-medium">{successMessage}</span>
         </div>
       )}
 
-      {/* ===== DEPARTMENT MATRIX GRID ===== */}
-      <section className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
-          <Database size={24} className="text-[#263A81]" />
-          <h2 className="text-xl font-bold text-[#1F2937]">Department Matrix</h2>
-          <span className="text-sm text-[#6B7280] bg-gray-100 px-3 py-1 rounded-full">
-            {departments.length} departments
-          </span>
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
+          <AlertCircle size={20} className="text-red-600" />
+          <span className="text-red-800 font-medium">{error}</span>
         </div>
+      )}
 
+      {/* Search Bar */}
+      <div className="mb-6 flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
+          <input
+            type="text"
+            placeholder="Search departments..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-10 pl-10 pr-4 rounded-lg border border-[#E5E7EB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+          />
+        </div>
+        <span className="text-sm text-[#6B7280]">
+          {filteredDepartments.length} department{filteredDepartments.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Loading State */}
+      {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {departments.map((department) => {
-            const stats = getDepartmentStats(department);
-            const statusConfig = getStatusBadge(department.hodStatus);
-            const isSelected = selectedDepartmentId === department.id;
-
-            return (
-              <div
-                key={department.id}
-                className={`bg-white rounded-xl border p-6 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer ${
-                  isSelected ? 'border-[#263A81] shadow-lg shadow-[#263A81]/10' : 'border-[#E5E7EB]'
-                }`}
-                onClick={() => setSelectedDepartmentId(department.id)}
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-lg font-bold text-[#1F2937]">{department.name}</h3>
-                    <p className="text-xs text-[#6B7280] font-mono">{department.code}</p>
-                  </div>
-                  <div className="p-2 bg-[#263A81]/10 rounded-lg">
-                    <Building size={18} className="text-[#263A81]" />
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#6B7280]">Employees</span>
-                    <span className="font-semibold text-[#1F2937]">{department.headcount}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#6B7280]">Head of Department</span>
-                    <span className="font-medium text-[#1F2937]">{department.hodName}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#6B7280]">HOD Status</span>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}
-                    >
-                      {statusConfig.icon}
-                      {statusConfig.label}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#6B7280]">Active Tasks</span>
-                    <span className="font-semibold text-[#1F2937]">{stats.totalActiveTasks}</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedDepartmentId(department.id);
-                  }}
-                  className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#263A81]/10 text-[#263A81] hover:bg-[#263A81]/20 rounded-lg transition font-medium text-sm"
-                >
-                  <Eye size={16} />
-                  Inspect Department
-                </button>
-              </div>
-            );
-          })}
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm animate-pulse">
+              <div className="h-20 bg-gray-200 rounded mb-3"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
         </div>
-      </section>
-
-      {/* ===== INTERACTIVE INSPECTOR PANEL ===== */}
-      {selectedDepartment && (
-        <section className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden animate-fade-in">
-          {/* Selected Department Header */}
-          <div className="p-6 border-b border-[#E5E7EB] bg-gradient-to-r from-[#263A81]/5 to-transparent">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-3">
-                  <Building size={28} className="text-[#263A81]" />
-                  <div>
-                    <h2 className="text-2xl font-bold text-[#1F2937]">{selectedDepartment.name}</h2>
-                    <p className="text-sm text-[#6B7280]">
-                      {selectedDepartment.code} · {selectedDepartment.operationalFocus}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg border border-[#E5E7EB]">
-                  <Users size={16} className="text-[#263A81]" />
-                  <span className="font-medium">{selectedDepartment.headcount}</span>
-                  <span className="text-[#6B7280]">employees</span>
-                </div>
-              </div>
+      ) : (
+        <>
+          {/* Department Cards Grid */}
+          {filteredDepartments.length === 0 ? (
+            <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
+              <Building size={56} className="mx-auto text-[#6B7280] opacity-30 mb-4" />
+              <p className="text-lg font-medium text-[#1F2937] mb-2">No departments found</p>
+              <p className="text-sm text-[#6B7280] mb-6">Create your first department to get started</p>
+              <button
+                onClick={openCreateModal}
+                className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#263A81] text-white font-medium rounded-lg hover:bg-[#1e2f6a] transition"
+              >
+                <Plus size={18} />
+                Create Department
+              </button>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredDepartments.map((department) => {
+                const employeeCount = getEmployeeCount(department);
+                const hodName = getHODName(department);
+                const statusConfig = getStatusBadge(department.isActive);
 
-          <div className="p-6 space-y-6">
-            {/* HOD Activity Spotlight */}
-            <div className="bg-[#FEFEFC] rounded-lg border border-[#E5E7EB] p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <UserCog size={18} className="text-[#263A81]" />
-                <h3 className="font-semibold text-[#1F2937]">HOD Activity Spotlight</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#263A81] flex items-center justify-center text-white font-bold text-sm">
-                    {selectedDepartment.hodName.split(' ').map(n => n[0]).join('')}
-                  </div>
-                  <div>
-                    <p className="font-medium text-[#1F2937]">{selectedDepartment.hodName}</p>
-                    <p className="text-sm text-[#6B7280] truncate max-w-[180px]" title={selectedDepartment.hodEmail}>
-                      {selectedDepartment.hodEmail}
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-[#6B7280] uppercase tracking-wider">
-                    Account Status
-                  </label>
-                  <div className="mt-1">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadge(selectedDepartment.hodStatus).bg} ${getStatusBadge(selectedDepartment.hodStatus).text}`}
-                    >
-                      {getStatusBadge(selectedDepartment.hodStatus).icon}
-                      {getStatusBadge(selectedDepartment.hodStatus).label}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-[#6B7280] uppercase tracking-wider">
-                    Total Activity Count
-                  </label>
-                  <p className="text-2xl font-bold text-[#1F2937] mt-1">
-                    {selectedDepartment.hodActivityCount}
-                  </p>
-                  <p className="text-xs text-[#6B7280]">Tasks managed</p>
-                </div>
-              </div>
-            </div>
+                return (
+                  <div
+                    key={department.id}
+                    className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group"
+                    onClick={() => handleCardClick(department.id!)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-bold text-[#1F2937] truncate group-hover:text-[#263A81] transition-colors">
+                          {department.nom_departement || 'Unnamed'}
+                        </h3>
+                        {department.code && (
+                          <p className="text-xs text-[#6B7280] font-mono">{department.code}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(department);
+                          }}
+                          className="p-1.5 hover:bg-blue-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                          title="Edit department"
+                        >
+                          <Edit size={16} className="text-blue-500" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteModal(department);
+                          }}
+                          className="p-1.5 hover:bg-red-50 rounded-lg transition opacity-0 group-hover:opacity-100"
+                          title="Delete department"
+                        >
+                          <Trash2 size={16} className="text-red-400" />
+                        </button>
+                      </div>
+                    </div>
 
-            {/* Unit Personnel Sub-Table */}
-            <div>
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-                <div className="flex items-center gap-2">
-                  <Users size={18} className="text-[#263A81]" />
-                  <h3 className="font-semibold text-[#1F2937]">Unit Personnel</h3>
-                  <span className="text-sm text-[#6B7280] bg-gray-100 px-2 py-0.5 rounded-full">
-                    {selectedDepartment.employees.length}
-                  </span>
-                </div>
-                <div className="relative">
-                  <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
-                  <input
-                    type="text"
-                    placeholder="Search personnel..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full md:w-56 h-9 pl-9 pr-4 rounded-lg border border-[#E5E7EB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition text-sm"
-                  />
-                </div>
-              </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Head of Department</span>
+                        <span className="font-medium text-[#1F2937] flex items-center gap-1">
+                          {hodName !== 'Unassigned' ? (
+                            <>
+                              <User size={14} className="text-[#6B7280]" />
+                              {hodName}
+                            </>
+                          ) : (
+                            <span className="text-[#6B7280] italic">Unassigned</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Employees</span>
+                        <span className="font-semibold text-[#1F2937]">{employeeCount}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[#6B7280]">Status</span>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}
+                        >
+                          {statusConfig.icon}
+                          {statusConfig.label}
+                        </span>
+                      </div>
+                    </div>
 
-              <div className="overflow-x-auto rounded-lg border border-[#E5E7EB]">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[#E5E7EB] bg-gray-50/70">
-                      <th className="text-left py-3 px-4 text-[#6B7280] font-semibold tracking-wide">Employee Name</th>
-                      <th className="text-left py-3 px-4 text-[#6B7280] font-semibold tracking-wide">Corporate Email</th>
-                      <th className="text-left py-3 px-4 text-[#6B7280] font-semibold tracking-wide">Job Role</th>
-                      <th className="text-left py-3 px-4 text-[#6B7280] font-semibold tracking-wide">Active Tasks</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E5E7EB]">
-                    {filteredEmployees.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-[#6B7280]">
-                          No personnel found matching your search
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredEmployees.map((employee) => (
-                        <tr key={employee.id} className="hover:bg-gray-50/50 transition duration-150">
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-[#263A81]/10 flex items-center justify-center text-[#263A81] font-semibold text-xs flex-shrink-0">
-                                {employee.name.split(' ').map(n => n[0]).join('')}
-                              </div>
-                              <span className="font-medium text-[#1F2937] truncate max-w-[120px] md:max-w-[180px]" title={employee.name}>
-                                {employee.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-[#6B7280]">
-                            <div className="flex items-center gap-1 min-w-0">
-                              <Mail size={14} className="flex-shrink-0" />
-                              <span className="truncate max-w-[150px] md:max-w-[200px] block" title={employee.email}>
-                                {employee.email}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 text-[#1F2937] truncate max-w-[120px] md:max-w-[160px]" title={employee.jobRole}>
-                            {employee.jobRole}
-                          </td>
-                          <td className="py-3 px-4">
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 whitespace-nowrap">
-                              {employee.activeTasks} {employee.activeTasks === 1 ? 'task' : 'tasks'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                    {department.description && (
+                      <div className="mt-3 pt-3 border-t border-[#E5E7EB]">
+                        <p className="text-xs text-[#6B7280] line-clamp-2">{department.description}</p>
+                      </div>
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        </section>
+          )}
+        </>
       )}
 
       {/* ===== CREATE DEPARTMENT MODAL ===== */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in">
-            <div className="flex items-center justify-between p-6 border-b border-[#E5E7EB]">
+            <div className="sticky top-0 bg-white border-b border-[#E5E7EB] p-6 flex items-center justify-between z-10">
               <div className="flex items-center gap-3">
                 <Building size={24} className="text-[#263A81]" />
-                <h2 className="text-xl font-bold text-[#1F2937]">Create New Department</h2>
+                <div>
+                  <h2 className="text-xl font-bold text-[#1F2937]">Create New Department</h2>
+                  <p className="text-sm text-[#6B7280]">Add a new department to your organization</p>
+                </div>
               </div>
               <button
                 onClick={closeCreateModal}
@@ -470,99 +464,78 @@ const AdminDepartmentInspectorPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateDepartment} className="p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1F2937] mb-1">
-                    Department Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleFormChange}
-                    placeholder="e.g., Marketing"
-                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-[#1F2937] mb-1">
-                    Department Code
-                  </label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={formData.code}
-                    onChange={handleFormChange}
-                    placeholder="e.g., DEPT-MKT-2026"
-                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                  />
-                  <p className="text-xs text-[#6B7280] mt-1">Leave blank to auto-generate</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-[#1F2937] mb-1">
-                    Head of Department Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="hodName"
-                    value={formData.hodName}
-                    onChange={handleFormChange}
-                    placeholder="e.g., John Doe"
-                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-[#1F2937] mb-1">
-                    HOD Email <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Mail size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
-                    <input
-                      type="email"
-                      name="hodEmail"
-                      value={formData.hodEmail}
-                      onChange={handleFormChange}
-                      placeholder="hod@company.com"
-                      className="w-full h-12 pl-10 pr-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                      required
-                    />
-                  </div>
-                </div>
+              <div>
+                <label htmlFor="nom_departement" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  Department Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="nom_departement"
+                  name="nom_departement"
+                  value={formData.nom_departement}
+                  onChange={handleFormChange}
+                  placeholder="Enter department name"
+                  className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                  required
+                  disabled={isSubmitting}
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#1F2937] mb-1">
-                  Operational Focus <span className="text-red-500">*</span>
+                <label htmlFor="description" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  Description
                 </label>
                 <textarea
-                  name="operationalFocus"
-                  value={formData.operationalFocus}
+                  id="description"
+                  name="description"
+                  value={formData.description}
                   onChange={handleFormChange}
-                  placeholder="Describe the department's primary focus and responsibilities..."
+                  placeholder="Describe the department's purpose and responsibilities"
                   rows={3}
-                  className="w-full px-4 py-3 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition resize-none"
-                  required
+                  className="w-full px-4 py-2.5 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition resize-none"
+                  disabled={isSubmitting}
                 />
+              </div>
+
+              <div>
+                <label htmlFor="chef_departementId" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  Head of Department
+                </label>
+                <select
+                  id="chef_departementId"
+                  name="chef_departementId"
+                  value={formData.chef_departementId}
+                  onChange={handleFormChange}
+                  className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select HOD (optional)</option>
+                  {getAvailableHODs().map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.nom} ({user.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-[#6B7280]">
+                  Only users with HOD role can be selected. Only unassigned HODs are shown.
+                </p>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="flex-1 px-4 py-3 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95"
+                  className="flex-1 px-4 py-2.5 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
                 >
-                  <Plus size={18} className="inline mr-2" />
+                  <Building size={18} />
                   Create Department
                 </button>
               </div>
@@ -571,20 +544,182 @@ const AdminDepartmentInspectorPage: React.FC = () => {
         </div>
       )}
 
+      {/* ===== EDIT DEPARTMENT MODAL ===== */}
+      {isEditModalOpen && selectedDepartment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in">
+            <div className="sticky top-0 bg-white border-b border-[#E5E7EB] p-6 flex items-center justify-between z-10">
+              <div className="flex items-center gap-3">
+                <Edit size={24} className="text-[#263A81]" />
+                <div>
+                  <h2 className="text-xl font-bold text-[#1F2937]">Edit Department</h2>
+                  <p className="text-sm text-[#6B7280]">Update department information for {selectedDepartment.nom_departement}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeEditModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                aria-label="Close modal"
+              >
+                <X size={20} className="text-[#6B7280]" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditDepartment} className="p-6 space-y-5">
+              <div>
+                <label htmlFor="edit-nom_departement" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  Department Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="edit-nom_departement"
+                  name="nom_departement"
+                  value={editFormData.nom_departement}
+                  onChange={handleEditFormChange}
+                  className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="edit-description" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  Description
+                </label>
+                <textarea
+                  id="edit-description"
+                  name="description"
+                  value={editFormData.description}
+                  onChange={handleEditFormChange}
+                  rows={3}
+                  className="w-full px-4 py-2.5 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition resize-none"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="edit-chef_departementId" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  Head of Department
+                </label>
+                <select
+                  id="edit-chef_departementId"
+                  name="chef_departementId"
+                  value={editFormData.chef_departementId}
+                  onChange={handleEditFormChange}
+                  className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select HOD (optional)</option>
+                  {getAvailableHODs(selectedDepartment.id).map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.nom} ({user.email})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-[#6B7280]">
+                  Only users with HOD role can be selected. Only unassigned HODs are shown.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2.5 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                >
+                  <Edit size={18} />
+                  Update Department
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===== DELETE CONFIRMATION MODAL ===== */}
+      {isDeleteModalOpen && departmentToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-xl max-w-md w-full shadow-2xl animate-scale-in">
+            <div className="p-6 border-b border-[#E5E7EB]">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <Trash2 size={24} className="text-red-600" />
+                </div>
+                <h2 className="text-xl font-bold text-[#1F2937]">Delete Department</h2>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <p className="text-[#1F2937] mb-2">
+                Are you sure you want to delete <span className="font-semibold">{departmentToDelete.nom_departement}</span>?
+              </p>
+              <p className="text-sm text-[#6B7280] mb-4">
+                This action cannot be undone. All associated data will be permanently removed.
+              </p>
+              {getEmployeeCount(departmentToDelete) > 0 && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-red-700">
+                    <AlertCircle size={16} />
+                    <span>
+                      Cannot delete: {getEmployeeCount(departmentToDelete)} user{getEmployeeCount(departmentToDelete) !== 1 ? 's' : ''} are currently assigned to this department.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 p-6 pt-0 border-t border-[#E5E7EB]">
+              <button
+                onClick={closeDeleteModal}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteDepartment}
+                className={`flex-1 px-4 py-2.5 text-white font-bold rounded-lg transition ${
+                  getEmployeeCount(departmentToDelete) > 0
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+                disabled={isSubmitting || getEmployeeCount(departmentToDelete) > 0}
+              >
+                Delete Department
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
+          from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes scaleIn {
-          from { transform: scale(0.9); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
         }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
         .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
       `}</style>
     </AppLayout>
   );
 };
 
-export default AdminDepartmentInspectorPage;
+export default DepartmentsPage;

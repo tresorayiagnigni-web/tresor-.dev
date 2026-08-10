@@ -2,14 +2,13 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/app/layout/AppLayout';
 import {
   Users,
   UserPlus,
   Search,
-  Filter,
-  MoreVertical,
   Edit,
   Trash2,
   UserCheck,
@@ -18,7 +17,6 @@ import {
   Mail,
   Building,
   Clock,
-  ChevronDown,
   X,
   CheckCircle,
   AlertCircle,
@@ -27,209 +25,154 @@ import {
   Eye,
   EyeOff,
   Save,
+  ArrowRight,
 } from 'lucide-react';
+import { 
+  getUsers, 
+  createUser, 
+  updateUser, 
+  deleteUser,
+  type User as ApiUser,
+  type UserRole,
+  type UserStatus,
+} from '@/lib/actions/userActions';
+import { getDepartments, type Department } from '@/lib/actions/departmentActions';
+import { showSuccess, formatDate } from '@/lib/helpers/adminHelpers';
 
 // ===== TYPE DEFINITIONS =====
-type UserRole = 'admin' | 'hod' | 'employee';
-type UserStatus = 'active' | 'suspended' | 'pending';
-type UserDepartment = 'IT Architecture' | 'Human Resources' | 'Finance' | 'Logistics' | 'Marketing' | 'Operations' | 'Unassigned';
-
-interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  role: UserRole;
-  department: UserDepartment;
-  status: UserStatus;
-  avatar: string;
-  joinedDate: string;
-  lastActive: string;
-  phone?: string;
-  location?: string;
-}
-
 interface CreateUserFormData {
-  fullName: string;
+  nom: string;
   email: string;
-  phone: string;
+  telephone: string;
   role: UserRole;
-  department: UserDepartment;
-  location: string;
-  temporaryPassword: string;
+  departement: string;
+  password: string;
 }
 
 interface EditUserFormData {
-  fullName: string;
+  nom: string;
   email: string;
-  phone: string;
+  telephone: string;
   role: UserRole;
-  department: UserDepartment;
-  location: string;
+  departement: string;
   status: UserStatus;
 }
 
-// ===== MOCK DATA =====
-const MOCK_USERS: User[] = [
-  {
-    id: '1',
-    fullName: 'Dr. Sarah Taylor',
-    email: 's.taylor@mendocompany.com',
-    role: 'admin',
-    department: 'IT Architecture',
-    status: 'active',
-    avatar: 'ST',
-    joinedDate: '2024-01-01',
-    lastActive: '2026-03-18',
-    phone: '+1 (555) 123-4567',
-    location: 'New York, USA',
-  },
-  {
-    id: '2',
-    fullName: 'John Doe',
-    email: 'john.doe@mendocompany.com',
-    role: 'employee',
-    department: 'IT Architecture',
-    status: 'active',
-    avatar: 'JD',
-    joinedDate: '2024-01-15',
-    lastActive: '2026-03-17',
-    phone: '+1 (555) 234-5678',
-    location: 'Boston, USA',
-  },
-  {
-    id: '3',
-    fullName: 'Alice Smith',
-    email: 'alice.smith@mendocompany.com',
-    role: 'hod',
-    department: 'Human Resources',
-    status: 'active',
-    avatar: 'AS',
-    joinedDate: '2024-02-01',
-    lastActive: '2026-03-18',
-    phone: '+1 (555) 345-6789',
-    location: 'Chicago, USA',
-  },
-  {
-    id: '4',
-    fullName: 'Robert Johnson',
-    email: 'robert.johnson@mendocompany.com',
-    role: 'employee',
-    department: 'Finance',
-    status: 'active',
-    avatar: 'RJ',
-    joinedDate: '2024-03-10',
-    lastActive: '2026-03-16',
-    phone: '+1 (555) 456-7890',
-    location: 'San Francisco, USA',
-  },
-  {
-    id: '5',
-    fullName: 'Maria Garcia',
-    email: 'maria.garcia@mendocompany.com',
-    role: 'employee',
-    department: 'Logistics',
-    status: 'suspended',
-    avatar: 'MG',
-    joinedDate: '2024-04-05',
-    lastActive: '2026-03-10',
-    phone: '+1 (555) 567-8901',
-    location: 'Miami, USA',
-  },
-  {
-    id: '6',
-    fullName: 'James Wilson',
-    email: 'james.wilson@mendocompany.com',
-    role: 'employee',
-    department: 'Marketing',
-    status: 'pending',
-    avatar: 'JW',
-    joinedDate: '2024-05-20',
-    lastActive: '2026-03-17',
-    phone: '+1 (555) 678-9012',
-    location: 'Austin, USA',
-  },
-];
-
 // ===== MAIN COMPONENT =====
 const UsersPage: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const router = useRouter();
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState<boolean>(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [selectedUser, setSelectedUser] = useState<ApiUser | null>(null);
+  const [userToDelete, setUserToDelete] = useState<ApiUser | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [showSuccessBanner, setShowSuccessBanner] = useState<boolean>(false);
-  const [successMessage, setSuccessMessage] = useState<string>('');
 
   const [formData, setFormData] = useState<CreateUserFormData>({
-    fullName: '',
+    nom: '',
     email: '',
-    phone: '',
-    role: 'employee',
-    department: 'Unassigned',
-    location: '',
-    temporaryPassword: '',
+    telephone: '',
+    role: 'EMPLOYER',
+    departement: '',
+    password: '',
   });
 
   const [editFormData, setEditFormData] = useState<EditUserFormData>({
-    fullName: '',
+    nom: '',
     email: '',
-    phone: '',
-    role: 'employee',
-    department: 'Unassigned',
-    location: '',
-    status: 'active',
+    telephone: '',
+    role: 'EMPLOYER',
+    departement: '',
+    status: 'true',
   });
+
+  // ===== LOAD DATA =====
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    const userResult = await getUsers();
+    if (userResult.success && userResult.data) {
+      setUsers(userResult.data);
+    } else {
+      setError(userResult.message || 'Failed to load users');
+    }
+
+    const deptResult = await getDepartments();
+    if (deptResult.success && deptResult.data) {
+      setDepartments(deptResult.data);
+    }
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // ===== DERIVED STATE =====
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         user.department.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (user.nom || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (user.departement || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-    const matchesStatus = selectedStatus === 'all' || user.status === selectedStatus;
+    const userStatus = user.status === 'true' || user.status === true ? 'true' : 'false';
+    const matchesStatus = selectedStatus === 'all' || userStatus === selectedStatus;
     return matchesSearch && matchesRole && matchesStatus;
   });
 
   // ===== STATS =====
   const totalUsers = users.length;
-  const activeUsers = users.filter(u => u.status === 'active').length;
-  const suspendedUsers = users.filter(u => u.status === 'suspended').length;
-  const pendingUsers = users.filter(u => u.status === 'pending').length;
+  const activeUsers = users.filter(u => u.status === 'true' || u.status === true).length;
+  const suspendedUsers = users.filter(u => u.status === 'false' || u.status === false).length;
+  const adminCount = users.filter(u => u.role === 'ADMIN').length;
+  const hodCount = users.filter(u => u.role === 'HOD').length;
+  const employeeCount = users.filter(u => u.role === 'EMPLOYER').length;
 
   // ===== HELPERS =====
-  const getRoleBadge = (role: UserRole) => ({
-    admin: { bg: 'bg-blue-100', text: 'text-blue-800', icon: <Shield size={14} className="mr-1" />, label: 'Admin' },
-    hod: { bg: 'bg-purple-100', text: 'text-purple-800', icon: <UserCog size={14} className="mr-1" />, label: 'HOD' },
-    employee: { bg: 'bg-gray-100', text: 'text-gray-800', icon: <Users size={14} className="mr-1" />, label: 'Employee' },
-  }[role]);
+  const getRoleBadge = (role: UserRole | undefined) => {
+    const config = {
+      ADMIN: { bg: 'bg-blue-100', text: 'text-blue-800', icon: <Shield size={14} className="mr-1" />, label: 'Admin' },
+      HOD: { bg: 'bg-purple-100', text: 'text-purple-800', icon: <UserCog size={14} className="mr-1" />, label: 'HOD' },
+      EMPLOYER: { bg: 'bg-gray-100', text: 'text-gray-800', icon: <Users size={14} className="mr-1" />, label: 'Employee' },
+    };
+    return config[role || 'EMPLOYER'];
+  };
 
-  const getStatusBadge = (status: UserStatus) => ({
-    active: { bg: 'bg-green-100', text: 'text-green-800', icon: <CheckCircle size={14} className="mr-1" />, label: 'Active' },
-    suspended: { bg: 'bg-red-100', text: 'text-red-800', icon: <AlertCircle size={14} className="mr-1" />, label: 'Suspended' },
-    pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: <Clock size={14} className="mr-1" />, label: 'Pending' },
-  }[status]);
+  const getStatusBadge = (status: UserStatus | boolean | undefined) => {
+    const isActive = status === 'true' || status === true;
+    const isSuspended = status === 'false' || status === false;
+    if (isActive) {
+      return { bg: 'bg-green-100', text: 'text-green-800', icon: <CheckCircle size={14} className="mr-1" />, label: 'Active' };
+    } else if (isSuspended) {
+      return { bg: 'bg-red-100', text: 'text-red-800', icon: <AlertCircle size={14} className="mr-1" />, label: 'Suspended' };
+    } else {
+      return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: <Clock size={14} className="mr-1" />, label: 'Pending' };
+    }
+  };
 
-  const showSuccess = (message: string) => {
-    setSuccessMessage(message);
-    setShowSuccessBanner(true);
-    setTimeout(() => setShowSuccessBanner(false), 4000);
+  const navigateToUserProfile = (userId: number) => {
+    router.push(`/admin/users/${userId}`);
   };
 
   // ===== CREATE HANDLERS =====
   const openCreateModal = () => {
     setFormData({
-      fullName: '',
+      nom: '',
       email: '',
-      phone: '',
-      role: 'employee',
-      department: 'Unassigned',
-      location: '',
-      temporaryPassword: '',
+      telephone: '',
+      role: 'EMPLOYER',
+      departement: '',
+      password: '',
     });
     setIsCreateModalOpen(true);
   };
@@ -243,37 +186,41 @@ const UsersPage: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newUser: User = {
-      id: Date.now().toString(),
-      fullName: formData.fullName,
+    setIsSubmitting(true);
+    setError(null);
+
+    const result = await createUser({
+      nom: formData.nom,
       email: formData.email,
+      password: formData.password,
       role: formData.role,
-      department: formData.department,
-      status: 'active',
-      avatar: formData.fullName.split(' ').map(n => n[0]).join(''),
-      joinedDate: new Date().toISOString().split('T')[0],
-      lastActive: new Date().toISOString().split('T')[0],
-      phone: formData.phone,
-      location: formData.location || 'Unassigned',
-    };
-    setUsers([newUser, ...users]);
-    showSuccess(`User ${newUser.fullName} created successfully!`);
-    closeCreateModal();
+      departement: formData.departement,
+      telephone: formData.telephone,
+      status: 'true',
+    });
+
+    if (result.success && result.data) {
+      showSuccess(setSuccessMessage, `User ${result.data.nom} created successfully!`);
+      closeCreateModal();
+      loadData();
+    } else {
+      setError(result.message || 'Failed to create user');
+    }
+    setIsSubmitting(false);
   };
 
   // ===== EDIT HANDLERS =====
-  const openEditModal = (user: User) => {
+  const openEditModal = (user: ApiUser) => {
     setSelectedUser(user);
     setEditFormData({
-      fullName: user.fullName,
-      email: user.email,
-      phone: user.phone || '',
-      role: user.role,
-      department: user.department,
-      location: user.location || '',
-      status: user.status,
+      nom: user.nom || '',
+      email: user.email || '',
+      telephone: user.telephone || '',
+      role: user.role || 'EMPLOYER',
+      departement: user.departement || '',
+      status: user.status === 'true' || user.status === true ? 'true' : 'false',
     });
     setIsEditModalOpen(true);
   };
@@ -288,34 +235,33 @@ const UsersPage: React.FC = () => {
     setEditFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleUpdateUser = (e: React.FormEvent) => {
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUser) return;
+    setIsSubmitting(true);
+    setError(null);
 
-    const updatedUsers = users.map(user => {
-      if (user.id === selectedUser.id) {
-        return {
-          ...user,
-          fullName: editFormData.fullName,
-          email: editFormData.email,
-          role: editFormData.role,
-          department: editFormData.department,
-          status: editFormData.status,
-          phone: editFormData.phone,
-          location: editFormData.location || 'Unassigned',
-          avatar: editFormData.fullName.split(' ').map(n => n[0]).join(''),
-        };
-      }
-      return user;
+    const result = await updateUser(selectedUser.id!, {
+      nom: editFormData.nom,
+      email: editFormData.email,
+      role: editFormData.role,
+      departement: editFormData.departement,
+      telephone: editFormData.telephone,
+      status: editFormData.status,
     });
 
-    setUsers(updatedUsers);
-    showSuccess(`User ${editFormData.fullName} updated successfully!`);
-    closeEditModal();
+    if (result.success && result.data) {
+      showSuccess(setSuccessMessage, `User ${result.data.nom} updated successfully!`);
+      closeEditModal();
+      loadData();
+    } else {
+      setError(result.message || 'Failed to update user');
+    }
+    setIsSubmitting(false);
   };
 
   // ===== DELETE HANDLERS =====
-  const openDeleteModal = (user: User) => {
+  const openDeleteModal = (user: ApiUser) => {
     setUserToDelete(user);
     setIsDeleteModalOpen(true);
   };
@@ -325,26 +271,36 @@ const UsersPage: React.FC = () => {
     setUserToDelete(null);
   };
 
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if (!userToDelete) return;
-    setUsers(users.filter(user => user.id !== userToDelete.id));
-    showSuccess(`User ${userToDelete.fullName} deleted successfully`);
-    closeDeleteModal();
+    setIsSubmitting(true);
+    setError(null);
+
+    const result = await deleteUser(userToDelete.id!);
+    if (result.success) {
+      showSuccess(setSuccessMessage, `User ${userToDelete.nom} deleted successfully!`);
+      closeDeleteModal();
+      loadData();
+    } else {
+      setError(result.message || 'Failed to delete user');
+    }
+    setIsSubmitting(false);
   };
 
   // ===== STATUS TOGGLE =====
-  const handleToggleStatus = (userId: string) => {
-    const updatedUsers = users.map(user => {
-      if (user.id === userId) {
-        const newStatus = user.status === 'active' ? 'suspended' : user.status === 'suspended' ? 'active' : 'active';
-        return { ...user, status: newStatus };
-      }
-      return user;
-    });
-    setUsers(updatedUsers);
+  const handleToggleStatus = async (userId: number) => {
     const user = users.find(u => u.id === userId);
-    if (user) {
-      showSuccess(`${user.fullName} ${user.status === 'active' ? 'suspended' : 'activated'} successfully`);
+    if (!user) return;
+
+    const currentStatus = user.status === 'true' || user.status === true;
+    const newStatus = currentStatus ? 'false' : 'true';
+
+    const result = await updateUser(userId, { status: newStatus as UserStatus });
+    if (result.success) {
+      showSuccess(setSuccessMessage, `User ${user.nom} ${newStatus === 'true' ? 'activated' : 'suspended'} successfully!`);
+      loadData();
+    } else {
+      setError(result.message || 'Failed to update user status');
     }
   };
 
@@ -358,71 +314,85 @@ const UsersPage: React.FC = () => {
       createButtonText="Create User"
     >
       {/* Success Banner */}
-      {showSuccessBanner && (
+      {successMessage && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
           <CheckCircle size={20} className="text-green-600" />
           <span className="text-green-800 font-medium">{successMessage}</span>
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#6B7280]">Total Users</p>
-              <p className="text-3xl font-bold text-[#1F2937] mt-1">{totalUsers}</p>
-            </div>
-            <div className="p-3 bg-[#263A81]/10 rounded-lg">
-              <Users size={24} className="text-[#263A81]" />
-            </div>
-          </div>
-          <div className="mt-4 flex items-center gap-2 text-xs">
-            <span className="flex items-center gap-1 text-green-600">● {activeUsers} Active</span>
-            <span className="flex items-center gap-1 text-red-600">● {suspendedUsers} Suspended</span>
-            <span className="flex items-center gap-1 text-yellow-600">● {pendingUsers} Pending</span>
-          </div>
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
+          <AlertCircle size={20} className="text-red-600" />
+          <span className="text-red-800 font-medium">{error}</span>
         </div>
+      )}
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#6B7280]">Active Now</p>
-              <p className="text-3xl font-bold text-[#1F2937] mt-1">12</p>
+      {/* Loading State */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm animate-pulse">
+              <div className="h-16 bg-gray-200 rounded"></div>
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <UserCheck size={24} className="text-green-600" />
+          ))}
+        </div>
+      ) : (
+        /* Stats Cards */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#6B7280]">Total Users</p>
+                <p className="text-3xl font-bold text-[#1F2937] mt-1">{totalUsers}</p>
+              </div>
+              <div className="p-3 bg-[#263A81]/10 rounded-lg">
+                <Users size={24} className="text-[#263A81]" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-2 text-xs">
+              <span className="flex items-center gap-1 text-green-600">● {activeUsers} Active</span>
+              <span className="flex items-center gap-1 text-red-600">● {suspendedUsers} Suspended</span>
             </div>
           </div>
-          <div className="mt-4 text-xs text-[#6B7280]">Users currently online</div>
-        </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#6B7280]">Departments</p>
-              <p className="text-3xl font-bold text-[#1F2937] mt-1">6</p>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#6B7280]">Departments</p>
+                <p className="text-3xl font-bold text-[#1F2937] mt-1">{departments.length}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Building size={24} className="text-blue-600" />
+              </div>
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Building size={24} className="text-blue-600" />
-            </div>
+            <div className="mt-4 text-xs text-[#6B7280]">Across all departments</div>
           </div>
-          <div className="mt-4 text-xs text-[#6B7280]">Across all departments</div>
-        </div>
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#6B7280]">Admin Users</p>
-              <p className="text-3xl font-bold text-[#1F2937] mt-1">{users.filter(u => u.role === 'admin').length}</p>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#6B7280]">Admin Users</p>
+                <p className="text-3xl font-bold text-[#1F2937] mt-1">{adminCount}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <Shield size={24} className="text-purple-600" />
+              </div>
             </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Shield size={24} className="text-purple-600" />
+            <div className="mt-4 flex items-center gap-3 text-xs flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                HOD: {hodCount}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-gray-500"></span>
+                Emp: {employeeCount}
+              </span>
             </div>
           </div>
-          <div className="mt-4 text-xs text-[#6B7280]">System administrators</div>
         </div>
-      </div>
+      )}
 
       {/* Users Table */}
       <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
@@ -455,9 +425,9 @@ const UsersPage: React.FC = () => {
                 className="w-full sm:w-36 h-10 px-4 rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
               >
                 <option value="all">All Roles</option>
-                <option value="admin">Admin</option>
-                <option value="hod">HOD</option>
-                <option value="employee">Employee</option>
+                <option value="ADMIN">Admin</option>
+                <option value="HOD">HOD</option>
+                <option value="EMPLOYER">Employee</option>
               </select>
               {/* Status Filter */}
               <select
@@ -466,9 +436,8 @@ const UsersPage: React.FC = () => {
                 className="w-full sm:w-36 h-10 px-4 rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
               >
                 <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-                <option value="pending">Pending</option>
+                <option value="true">Active</option>
+                <option value="false">Suspended</option>
               </select>
               {/* Create User Button (Desktop) */}
               <button
@@ -515,20 +484,28 @@ const UsersPage: React.FC = () => {
                 </tr>
               ) : (
                 filteredUsers.map((user) => {
+                  const userStatus = user.status === 'true' || user.status === true ? 'true' : 'false';
                   const roleConfig = getRoleBadge(user.role);
-                  const statusConfig = getStatusBadge(user.status);
+                  const statusConfig = getStatusBadge(userStatus);
                   return (
-                    <tr key={user.id} className="hover:bg-gray-50/50 transition duration-150">
+                    <tr 
+                      key={user.id} 
+                      className="hover:bg-gray-50/50 transition duration-150 cursor-pointer group"
+                      onClick={() => navigateToUserProfile(user.id!)}
+                    >
                       <td className="py-3.5 px-6">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-[#263A81]/10 flex items-center justify-center text-[#263A81] font-semibold text-sm flex-shrink-0">
-                            {user.avatar}
+                            {user.nom?.split(' ').map(n => n[0]).join('') || 'U'}
                           </div>
                           <div>
-                            <div className="text-[#1F2937] font-medium">{user.fullName}</div>
+                            <div className="text-[#1F2937] font-medium group-hover:text-[#263A81] transition-colors flex items-center gap-2">
+                              {user.nom || 'Unknown'}
+                              <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-[#263A81]" />
+                            </div>
                             <div className="text-xs text-[#6B7280] flex items-center gap-1">
                               <Mail size={12} />
-                              <span>{user.email}</span>
+                              <span>{user.email || 'No email'}</span>
                             </div>
                           </div>
                         </div>
@@ -542,7 +519,7 @@ const UsersPage: React.FC = () => {
                       <td className="py-3.5 px-6">
                         <div className="flex items-center gap-1.5">
                           <Building size={14} className="text-[#6B7280]" />
-                          <span className="text-[#1F2937]">{user.department}</span>
+                          <span className="text-[#1F2937]">{user.departement || 'Unassigned'}</span>
                         </div>
                       </td>
                       <td className="py-3.5 px-6">
@@ -552,13 +529,16 @@ const UsersPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="py-3.5 px-6 text-[#6B7280] text-xs">
-                        {new Date(user.joinedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {formatDate(user.createdAt)}
                       </td>
                       <td className="py-3.5 px-6">
                         <div className="flex items-center justify-end gap-1">
                           {/* Edit Button */}
                           <button
-                            onClick={() => openEditModal(user)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(user);
+                            }}
                             className="p-1.5 hover:bg-blue-50 rounded-lg transition"
                             title="Edit user"
                           >
@@ -566,11 +546,14 @@ const UsersPage: React.FC = () => {
                           </button>
                           {/* Status Toggle Button */}
                           <button
-                            onClick={() => handleToggleStatus(user.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleStatus(user.id!);
+                            }}
                             className="p-1.5 hover:bg-gray-100 rounded-lg transition"
-                            title={user.status === 'active' ? 'Suspend user' : 'Activate user'}
+                            title={userStatus === 'true' ? 'Suspend user' : 'Activate user'}
                           >
-                            {user.status === 'active' ? (
+                            {userStatus === 'true' ? (
                               <UserX size={16} className="text-red-400 hover:text-red-600" />
                             ) : (
                               <UserCheck size={16} className="text-green-400 hover:text-green-600" />
@@ -578,7 +561,10 @@ const UsersPage: React.FC = () => {
                           </button>
                           {/* Delete Button */}
                           <button
-                            onClick={() => openDeleteModal(user)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openDeleteModal(user);
+                            }}
                             className="p-1.5 hover:bg-red-50 rounded-lg transition"
                             title="Delete user"
                           >
@@ -633,18 +619,19 @@ const UsersPage: React.FC = () => {
             <form onSubmit={handleCreateUser} className="p-6 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  <label htmlFor="nom" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
+                    id="nom"
+                    name="nom"
+                    value={formData.nom}
                     onChange={handleFormChange}
                     placeholder="Enter full name"
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     required
+                    disabled={isSubmitting}
                   />
                 </div>
 
@@ -663,38 +650,52 @@ const UsersPage: React.FC = () => {
                       placeholder="user@company.com"
                       className="w-full h-11 pl-10 pr-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                       required
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  <label htmlFor="telephone" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                     Phone Number
                   </label>
                   <input
                     type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
+                    id="telephone"
+                    name="telephone"
+                    value={formData.telephone}
                     onChange={handleFormChange}
                     placeholder="+1 (555) 000-0000"
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="location" className="block text-sm font-medium text-[#1F2937] mb-1.5">
-                    Location
+                  <label htmlFor="password" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                    Password <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
-                    id="location"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleFormChange}
-                    placeholder="City, Country"
-                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                  />
+                  <div className="relative">
+                    <Key size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      id="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleFormChange}
+                      placeholder="Set a password"
+                      className="w-full h-11 pl-10 pr-12 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                      required
+                      disabled={isSubmitting}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#6B7280] hover:text-[#1F2937] transition"
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -708,61 +709,34 @@ const UsersPage: React.FC = () => {
                     onChange={handleFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     required
+                    disabled={isSubmitting}
                   >
-                    <option value="employee">Employee</option>
-                    <option value="hod">Head of Department</option>
-                    <option value="admin">Administrator</option>
+                    <option value="EMPLOYER">Employee</option>
+                    <option value="HOD">Head of Department</option>
+                    <option value="ADMIN">Administrator</option>
                   </select>
                 </div>
 
                 <div>
-                  <label htmlFor="department" className="block text-sm font-medium text-[#1F2937] mb-1.5">
-                    Department <span className="text-red-500">*</span>
+                  <label htmlFor="departement" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                    Department
                   </label>
                   <select
-                    id="department"
-                    name="department"
-                    value={formData.department}
+                    id="departement"
+                    name="departement"
+                    value={formData.departement}
                     onChange={handleFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                    required
+                    disabled={isSubmitting}
                   >
-                    <option value="Unassigned">Unassigned</option>
-                    <option value="IT Architecture">IT Architecture</option>
-                    <option value="Human Resources">Human Resources</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Logistics">Logistics</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Operations">Operations</option>
+                    <option value="">Unassigned</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.nom_departement}>
+                        {dept.nom_departement}
+                      </option>
+                    ))}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label htmlFor="temporaryPassword" className="block text-sm font-medium text-[#1F2937] mb-1.5">
-                  Temporary Password <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Key size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="temporaryPassword"
-                    name="temporaryPassword"
-                    value={formData.temporaryPassword}
-                    onChange={handleFormChange}
-                    placeholder="Set a temporary password"
-                    className="w-full h-11 pl-10 pr-12 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#6B7280] hover:text-[#1F2937] transition"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                <p className="mt-1.5 text-xs text-[#6B7280]">User will be prompted to change this on first login</p>
               </div>
 
               <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
@@ -770,12 +744,14 @@ const UsersPage: React.FC = () => {
                   type="button"
                   onClick={closeCreateModal}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2.5 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
                 >
                   <UserPlus size={18} />
                   Create User
@@ -795,7 +771,7 @@ const UsersPage: React.FC = () => {
                 <Edit size={24} className="text-[#263A81]" />
                 <div>
                   <h2 className="text-xl font-bold text-[#1F2937]">Edit User</h2>
-                  <p className="text-sm text-[#6B7280]">Update user information for {selectedUser.fullName}</p>
+                  <p className="text-sm text-[#6B7280]">Update user information for {selectedUser.nom}</p>
                 </div>
               </div>
               <button
@@ -810,18 +786,18 @@ const UsersPage: React.FC = () => {
             <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="edit-fullName" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  <label htmlFor="edit-nom" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    id="edit-fullName"
-                    name="fullName"
-                    value={editFormData.fullName}
+                    id="edit-nom"
+                    name="nom"
+                    value={editFormData.nom}
                     onChange={handleEditFormChange}
-                    placeholder="Enter full name"
-                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     required
+                    disabled={isSubmitting}
                   />
                 </div>
 
@@ -837,40 +813,25 @@ const UsersPage: React.FC = () => {
                       name="email"
                       value={editFormData.email}
                       onChange={handleEditFormChange}
-                      placeholder="user@company.com"
-                      className="w-full h-11 pl-10 pr-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                      className="w-full h-11 pl-10 pr-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                       required
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="edit-phone" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                  <label htmlFor="edit-telephone" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                     Phone Number
                   </label>
                   <input
                     type="tel"
-                    id="edit-phone"
-                    name="phone"
-                    value={editFormData.phone}
+                    id="edit-telephone"
+                    name="telephone"
+                    value={editFormData.telephone}
                     onChange={handleEditFormChange}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="edit-location" className="block text-sm font-medium text-[#1F2937] mb-1.5">
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    id="edit-location"
-                    name="location"
-                    value={editFormData.location}
-                    onChange={handleEditFormChange}
-                    placeholder="City, Country"
-                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
                   />
                 </div>
 
@@ -885,32 +846,32 @@ const UsersPage: React.FC = () => {
                     onChange={handleEditFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     required
+                    disabled={isSubmitting}
                   >
-                    <option value="employee">Employee</option>
-                    <option value="hod">Head of Department</option>
-                    <option value="admin">Administrator</option>
+                    <option value="EMPLOYER">Employee</option>
+                    <option value="HOD">Head of Department</option>
+                    <option value="ADMIN">Administrator</option>
                   </select>
                 </div>
 
                 <div>
-                  <label htmlFor="edit-department" className="block text-sm font-medium text-[#1F2937] mb-1.5">
-                    Department <span className="text-red-500">*</span>
+                  <label htmlFor="edit-departement" className="block text-sm font-medium text-[#1F2937] mb-1.5">
+                    Department
                   </label>
                   <select
-                    id="edit-department"
-                    name="department"
-                    value={editFormData.department}
+                    id="edit-departement"
+                    name="departement"
+                    value={editFormData.departement}
                     onChange={handleEditFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
-                    required
+                    disabled={isSubmitting}
                   >
-                    <option value="Unassigned">Unassigned</option>
-                    <option value="IT Architecture">IT Architecture</option>
-                    <option value="Human Resources">Human Resources</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Logistics">Logistics</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Operations">Operations</option>
+                    <option value="">Unassigned</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.nom_departement}>
+                        {dept.nom_departement}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -926,10 +887,10 @@ const UsersPage: React.FC = () => {
                   onChange={handleEditFormChange}
                   className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                   required
+                  disabled={isSubmitting}
                 >
-                  <option value="active">Active</option>
-                  <option value="suspended">Suspended</option>
-                  <option value="pending">Pending</option>
+                  <option value="true">Active</option>
+                  <option value="false">Suspended</option>
                 </select>
               </div>
 
@@ -938,12 +899,14 @@ const UsersPage: React.FC = () => {
                   type="button"
                   onClick={closeEditModal}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2.5 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
                 >
                   <Save size={18} />
                   Update User
@@ -966,19 +929,21 @@ const UsersPage: React.FC = () => {
                 <h2 className="text-xl font-bold text-[#1F2937]">Delete User</h2>
               </div>
               <p className="text-[#6B7280] mb-2">
-                Are you sure you want to delete <span className="font-semibold text-[#1F2937]">{userToDelete.fullName}</span>?
+                Are you sure you want to delete <span className="font-semibold text-[#1F2937]">{userToDelete.nom}</span>?
               </p>
               <p className="text-sm text-[#6B7280] mb-6">This action cannot be undone. All associated data will be permanently removed.</p>
               <div className="flex gap-3">
                 <button
                   onClick={closeDeleteModal}
                   className="flex-1 px-4 py-2.5 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDeleteUser}
                   className="flex-1 px-4 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition"
+                  disabled={isSubmitting}
                 >
                   Delete User
                 </button>
@@ -999,6 +964,11 @@ const UsersPage: React.FC = () => {
         }
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
         .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
     </AppLayout>
   );

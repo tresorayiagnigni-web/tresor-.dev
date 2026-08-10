@@ -1,11 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToOne, CreateDateColumn, OneToMany, JoinColumn } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
+import { BaseEntity } from 'src/auth/entities/baseEntity';
+import { Project } from 'src/project/entities/project.entity';
 
 @Entity('departements')
-export class Departments {
-    @PrimaryGeneratedColumn()
-    id?: number;
-
+export class Departments extends BaseEntity{
+   
     @Column({ unique: true })
     nom_departement?: string;
 
@@ -16,14 +16,19 @@ export class Departments {
     @Column({ nullable: true })
     description?: string;
 
+
     @OneToMany(() => User, (user) => user.departement)
     users?: User[];
 
-    @CreateDateColumn()
-    date_creation?: Date;
 
-    // @OneToOne(() => User, user => user.department, { onDelete: 'SET NULL' })
-    // @Column()
-    // userId?: number;
+    @OneToMany(
+      () => Project,
+    (project) => project.departement,
+    )
+    projets?: Project[];
+
+    // @CreateDateColumn()
+    // date_creation?: Date;
+
 
 }

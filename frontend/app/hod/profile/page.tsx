@@ -2,8 +2,8 @@
 
 'use client';
 
-import React, { useState } from 'react';
-import { HODLayout } from '@/app/layout/HodLayout';
+import React, { useState, useEffect } from 'react';
+import {  HODLayout } from '@/app/layout/HodLayout';
 import {
   Save,
   Key,
@@ -19,6 +19,8 @@ import {
   CheckCircle,
   LogOut as LogOutIcon,
 } from 'lucide-react';
+import { getUserById, updateUser, type User } from '@/lib/actions/userActions';
+import { getDepartmentById, type Department } from '@/lib/actions/departmentActions';
 
 // ========== TYPE DEFINITIONS ==========
 interface ProfileFormData {
@@ -32,18 +34,62 @@ interface ProfileFormData {
 
 // ========== MAIN COMPONENT ==========
 const HODProfilePage: React.FC = () => {
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [showSuccessBanner, setShowSuccessBanner] = useState<boolean>(false);
+  const [successMessage, setSuccessMessage] = useState<string>('');
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
+  const [department, setDepartment] = useState<Department | null>(null);
   
+  // ========== HOD USER INFO ==========
+  // In production, this would come from auth context
+  const hodUserId = 1; // Placeholder - should come from auth
+  const departmentId = 1; // Placeholder - should come from auth
+
   // ========== FORM STATE ==========
   const [formData, setFormData] = useState<ProfileFormData>({
-    fullName: 'Dr. Sarah Taylor',
-    email: 's.taylor@mendocompany.com',
-    phoneNumber: '+1 (555) 123-4567',
+    fullName: '',
+    email: '',
+    phoneNumber: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+
+  // ========== LOAD DATA ==========
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Fetch HOD user data
+      const userResult = await getUserById(hodUserId);
+      if (userResult.success && userResult.data) {
+        const user = userResult.data;
+        setFormData(prev => ({
+          ...prev,
+          fullName: user.nom || '',
+          email: user.email || '',
+          phoneNumber: user.telephone || '',
+        }));
+      }
+
+      // Fetch department data
+      const deptResult = await getDepartmentById(departmentId);
+      if (deptResult.success && deptResult.data) {
+        setDepartment(deptResult.data);
+      }
+    } catch (err) {
+      setError('Failed to load profile data');
+    }
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // ========== HELPER FUNCTIONS ==========
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,13 +97,71 @@ const HODProfilePage: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSaveChanges = (e: React.FormEvent) => {
-    e.preventDefault();
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message);
     setShowSuccessBanner(true);
     setTimeout(() => {
       setShowSuccessBanner(false);
-    }, 5000);
-    console.log('Profile updated:', formData);
+    }, 4000);
+  };
+
+  const handleSaveChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    // Validate passwords if they are being changed
+    if (formData.newPassword || formData.currentPassword || formData.confirmPassword) {
+      if (!formData.currentPassword) {
+        setError('Current password is required to change password');
+        setIsSubmitting(false);
+        return;
+      }
+      if (formData.newPassword !== formData.confirmPassword) {
+        setError('New passwords do not match');
+        setIsSubmitting(false);
+        return;
+      }
+      if (formData.newPassword.length < 6) {
+        setError('New password must be at least 6 characters');
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    try {
+      // Update user profile
+      const updateData: any = {
+        nom: formData.fullName,
+        email: formData.email,
+        telephone: formData.phoneNumber,
+      };
+
+      // Only include password if it's being changed
+      if (formData.newPassword) {
+        updateData.password = formData.newPassword;
+        // Note: Current password verification should be handled by the backend
+      }
+
+      const result = await updateUser(hodUserId, updateData);
+      
+      if (result.success) {
+        showSuccess('Profile updated successfully!');
+        // Clear password fields
+        setFormData(prev => ({
+          ...prev,
+          currentPassword: '',
+          newPassword: '',
+          confirmPassword: '',
+        }));
+      } else {
+        setError(result.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      setError('An error occurred while updating profile');
+    }
+
+    setIsSubmitting(false);
   };
 
   const handleLogout = () => {
@@ -66,12 +170,32 @@ const HODProfilePage: React.FC = () => {
 
   const confirmLogout = () => {
     setShowLogoutModal(false);
+    // Clear cookies and redirect to login
+    document.cookie = 'my_secret_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
     window.location.href = '/login';
   };
 
   const cancelLogout = () => {
     setShowLogoutModal(false);
   };
+
+  // ===== LOADING STATE =====
+  if (isLoading) {
+    return (
+      <HODLayout
+        pageTitle="My Profile & Administrative Settings"
+        pageSubtitle="Loading profile..."
+        showCreateButton={false}
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#263A81] mx-auto mb-4"></div>
+            <p className="text-[#6B7280]">Loading profile...</p>
+          </div>
+        </div>
+      </HODLayout>
+    );
+  }
 
   // ========== RENDER ==========
   return (
@@ -84,7 +208,15 @@ const HODProfilePage: React.FC = () => {
       {showSuccessBanner && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
           <CheckCircle size={20} className="text-green-600" />
-          <span className="text-green-800 font-medium">Profile updated successfully!</span>
+          <span className="text-green-800 font-medium">{successMessage}</span>
+        </div>
+      )}
+
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
+          <AlertCircle size={20} className="text-red-600" />
+          <span className="text-red-800 font-medium">{error}</span>
         </div>
       )}
 
@@ -110,6 +242,7 @@ const HODProfilePage: React.FC = () => {
                   onChange={handleInputChange}
                   className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -127,6 +260,7 @@ const HODProfilePage: React.FC = () => {
                     onChange={handleInputChange}
                     className="w-full h-12 pl-10 pr-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     required
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
@@ -145,6 +279,7 @@ const HODProfilePage: React.FC = () => {
                   value={formData.phoneNumber}
                   onChange={handleInputChange}
                   className="w-full h-12 pl-10 pr-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -159,7 +294,7 @@ const HODProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label htmlFor="currentPassword" className="block text-sm font-medium text-[#1F2937] mb-1">
-                    Current Password
+                    Current Password <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="password"
@@ -169,6 +304,7 @@ const HODProfilePage: React.FC = () => {
                     onChange={handleInputChange}
                     placeholder="Enter current password"
                     className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
                   />
                 </div>
 
@@ -184,6 +320,7 @@ const HODProfilePage: React.FC = () => {
                     onChange={handleInputChange}
                     placeholder="Enter new password"
                     className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
                   />
                 </div>
 
@@ -199,18 +336,32 @@ const HODProfilePage: React.FC = () => {
                     onChange={handleInputChange}
                     placeholder="Confirm new password"
                     className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
+              <p className="mt-2 text-xs text-[#6B7280]">
+                Leave password fields blank to keep current password. Current password is required to change.
+              </p>
             </div>
 
             <div className="pt-4 border-t border-[#E5E7EB]">
               <button
                 type="submit"
                 className="flex items-center justify-center gap-2 px-8 py-3 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 shadow-lg shadow-[#263A81]/20 w-full md:w-auto"
+                disabled={isSubmitting}
               >
-                <Save size={20} />
-                Save Changes
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={20} />
+                    Save Changes
+                  </>
+                )}
               </button>
             </div>
           </form>
@@ -231,17 +382,26 @@ const HODProfilePage: React.FC = () => {
                 </label>
                 <p className="text-[#1F2937] font-medium mt-1 flex items-center gap-2">
                   <Building size={16} className="text-[#263A81]" />
-                  IT Architecture
+                  {department?.nom_departement || 'Loading...'}
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-[#6B7280] uppercase tracking-wider">
-                  Managed Unit ID
+                  Department Code
                 </label>
                 <p className="text-[#1F2937] font-medium mt-1 flex items-center gap-2">
                   <Shield size={16} className="text-[#263A81]" />
-                  DEPT-ITA-2026
+                  {department?.code || 'N/A'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] uppercase tracking-wider">
+                  Department Description
+                </label>
+                <p className="text-[#1F2937] font-medium mt-1">
+                  {department?.description || 'No description available'}
                 </p>
               </div>
             </div>
@@ -263,9 +423,22 @@ const HODProfilePage: React.FC = () => {
                 </label>
                 <div className="mt-1 p-3 bg-[#FEFEFC] border border-[#E5E7EB] rounded-lg">
                   <p className="text-sm text-[#1F2937]">
-                    Authorized for Personnel Offboarding, Task CRUD, and Task Allocation within IT Architecture.
+                    Authorized for Personnel Offboarding, Task CRUD, and Task Allocation within {department?.nom_departement || 'your department'}.
                   </p>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] uppercase tracking-wider">
+                  Department Status
+                </label>
+                <p className="text-[#1F2937] font-medium mt-1 flex items-center gap-2">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                    department?.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {department?.isActive !== false ? 'Active' : 'Inactive'}
+                  </span>
+                </p>
               </div>
             </div>
           </div>
@@ -325,6 +498,7 @@ const HODProfilePage: React.FC = () => {
               <button
                 onClick={cancelLogout}
                 className="flex-1 px-4 py-3 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                disabled={isSubmitting}
               >
                 Cancel
               </button>
@@ -350,6 +524,11 @@ const HODProfilePage: React.FC = () => {
         }
         .animate-fade-in { animation: fadeIn 0.2s ease-out; }
         .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
     </HODLayout>
   );

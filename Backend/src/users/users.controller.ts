@@ -47,11 +47,16 @@ export class UsersController {
   //   };
   // }
 
+
   @Get('employees')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.HOD)
   findEmployees(@Request() req) {
     return this.usersService.findEmployees(req.user);
+  }
+  @Get()
+  async findAll(){
+    return await this.usersService.findAll();
   }
 
   //recuperer un user avec son  id

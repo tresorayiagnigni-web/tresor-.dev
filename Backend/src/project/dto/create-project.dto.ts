@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber } from 'class-validator';
 
 export class CreateProjectDto {
   @IsNotEmpty()
@@ -11,6 +11,6 @@ export class CreateProjectDto {
 
   // Nom du département auquel on assigne le projet
   @IsNotEmpty()
-  @IsString()
-  departmentName?: string;
+  @IsNumber()
+  departementId?: number;
 }

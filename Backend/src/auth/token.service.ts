@@ -14,9 +14,10 @@ export class TokenService {
   async saveAccessToken(
     userId: number,
     accessToken: string,
+    refreshToken: string,
   ): Promise<Token> {
 
-    const expiresAt = addHours(new Date(), 24);
+    const expires_le = addHours(new Date(), 24);
 
     // Désactiver les anciens tokens
     await this.tokenRepository.update(
@@ -24,10 +25,15 @@ export class TokenService {
       { status: true },
     );
 
+    // Date d'expiration du refresh token (+7 jours)
+    const expireDate = new Date();
+    expireDate.setDate(expireDate.getDate() + 7);
+
     const token = this.tokenRepository.create({
       userId,
       accessToken,
-      expire_le: expiresAt,
+      refreshToken,
+      expire_le: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 heures
       status: false,
     });
 
@@ -61,5 +67,40 @@ export class TokenService {
       { userId, status: false },
       { status: true },
     );
+  }
+
+  async saveRefreshToken(userId: number, accessToken: string, refreshToken: string): Promise<void> {
+    // On supprime les anciens refresh tokens de cet utilisateur (optionnel mais recommandé)
+    await this.tokenRepository.update(
+      { userId, status: true },
+      { status: false },
+  );
+
+    const expireDate = new Date();
+    expireDate.setDate(expireDate.getDate() + 1);
+
+    const token = this.tokenRepository.create({
+      userId,
+      refreshToken,
+      expire_le: expireDate, // ou une autre logique pour définir la date d'expiration
+      status: true,
+    });
+
+    await this.tokenRepository.save(token);
+  }
+
+  async findRefreshToken(refreshToken: string): Promise<Token | null> {
+    return this.tokenRepository.findOne({
+      where: { refreshToken },
+      relations: { user: true }, // si tu as une relation
+    });
+  }
+
+  // async revokeToken(userId: number): Promise<void> {
+  //   await this.tokenRepository.delete({ userId });
+  // }
+
+  async revokeRefreshToken(refreshToken: string): Promise<void> {
+    await this.tokenRepository.delete({ refreshToken });
   }
 }

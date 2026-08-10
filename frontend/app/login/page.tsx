@@ -1,3 +1,5 @@
+// app/login/page.tsx
+
 'use client';
 
 import React, { useState, FormEvent, useEffect, startTransition } from 'react';
@@ -5,43 +7,72 @@ import { useActionState } from 'react';
 import { useRouter } from 'next/navigation';
 import { loginUser } from '../actions';
 
+// ========== TYPE DEFINITIONS ==========
+interface LoginResponse {
+  success: boolean;
+  message?: string;
+  user?: {
+    id: number;
+    email: string;
+    role: 'ADMIN' | 'HOD' | 'EMPLOYER';
+    nom: string;
+    status: boolean;
+  };
+}
+
+// ========== MAIN COMPONENT ==========
 const LoginPageV2: React.FC = () => {
   const router = useRouter();
   
-  // State for form fields (visual only - no validation)
+  // State for form fields
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [rememberDevice, setRememberDevice] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
 
-  // Use useActionState for server action - grab built-in isPending
-  const [state, formAction, isPending] = useActionState(loginUser, null);
+  // Use useActionState for server action
+  const [state, formAction, isPending] = useActionState<LoginResponse | null, FormData>(loginUser, null);
 
-  // Handle redirect when login is successful
+  // ===== ROLE-BASED REDIRECTION =====
   useEffect(() => {
-    if (state?.success) {
-      router.push('/employee/dashboard');
+    if (state?.success && state?.user) {
+      const role = state.user.role;
+      
+      // Redirect based on role
+      switch (role) {
+        case 'ADMIN':
+          router.push('/admin/control-center');
+          break;
+        case 'HOD':
+          router.push('/hod/dashboard');
+          break;
+        case 'EMPLOYER':
+          router.push('/employee/dashboard');
+          break;
+        default:
+          router.push('/employee/dashboard');
+          break;
+      }
     }
   }, [state, router]);
 
-  // Handle form submission - wrapped in startTransition
+  // ===== HANDLE FORM SUBMISSION =====
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // Prevent default browser reload
+    e.preventDefault();
     
     const formData = new FormData(e.currentTarget);
     
-    // Correct way to invoke formAction manually: wrap it in startTransition
     startTransition(() => {
       formAction(formData);
     });
   };
 
-  // Toggle password visibility
+  // ===== TOGGLE PASSWORD VISIBILITY =====
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
-  // Eye icon components
+  // ===== ICON COMPONENTS =====
   const EyeIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -56,7 +87,6 @@ const LoginPageV2: React.FC = () => {
     </svg>
   );
 
-  // Spinner component
   const SpinnerIcon = () => (
     <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -64,9 +94,10 @@ const LoginPageV2: React.FC = () => {
     </svg>
   );
 
+  // ========== RENDER ==========
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#FEFEFC] font-sans antialiased">
-      {/* LEFT PANEL - Branding (Hidden on Mobile) */}
+      {/* LEFT PANEL - Branding */}
       <div className="hidden md:flex md:w-1/2 bg-[#263A81] text-white flex-col justify-between p-12 lg:p-16">
         <div>
           <div className="text-4xl font-bold tracking-tight">MENDO HR</div>
@@ -90,7 +121,7 @@ const LoginPageV2: React.FC = () => {
       {/* RIGHT PANEL - Login Form */}
       <div className="flex-1 bg-[#FEFEFC] flex items-center justify-center p-6 md:p-8">
         <div className="w-full max-w-md md:max-w-[400px]">
-          {/* Mobile Branding - visible only on small screens */}
+          {/* Mobile Branding */}
           <div className="md:hidden text-center mb-8">
             <div className="text-3xl font-bold text-[#263A81]">MENDO HR</div>
             <div className="text-sm text-[#6B7280] mt-1">Human Resource Management</div>
@@ -103,7 +134,7 @@ const LoginPageV2: React.FC = () => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Display error message if state returns failed status */}
+            {/* Error Message */}
             {state && !state.success && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm text-center">
                 {state.message}
@@ -116,9 +147,10 @@ const LoginPageV2: React.FC = () => {
                 Email Address
               </label>
               <input
-                id='email'
+                id="email"
                 name="email"
                 type="email"
+                value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@mendocompany.com"
                 className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition duration-200"
@@ -139,6 +171,7 @@ const LoginPageV2: React.FC = () => {
                   id="password"
                   name="password"
                   type={showPassword ? 'text' : 'password'}
+                  value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition duration-200 pr-12"
@@ -160,7 +193,7 @@ const LoginPageV2: React.FC = () => {
               </div>
             </div>
 
-            {/* Remember & Forgot Row */}
+            {/* Remember Device */}
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2 text-[#1F2937] cursor-pointer">
                 <input
@@ -190,7 +223,6 @@ const LoginPageV2: React.FC = () => {
               )}
             </button>
 
-            {/* Visual feedback note */}
             <p className="text-center text-xs text-[#6B7280] mt-4">
               Enter credentials to access your dashboard
             </p>
@@ -198,15 +230,10 @@ const LoginPageV2: React.FC = () => {
         </div>
       </div>
 
-      {/* Global styles for animations */}
       <style jsx>{`
         @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
         .animate-spin {
           animation: spin 1s linear infinite;

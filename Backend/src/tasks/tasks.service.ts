@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException} from '@nestjs/common';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -7,7 +7,7 @@ import { Task } from './entities/task.entity';
 import { FilterTaskDto } from './dto/filter-task.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/auth/enums/role.enum';
-import { title } from 'process';
+
 
 
 
@@ -22,60 +22,65 @@ export class TasksService {
   ) {}
 
   async create(createTaskDto: CreateTaskDto, currentUser: User) {
-  const { title, description, nom_employer } = createTaskDto;
 
-  // 1. Trouver l'employé par son nom
+  // Chercher l'employé destinataire
   const employee = await this.userRepository.findOne({
     where: {
-      nom: nom_employer,
+      id: createTaskDto.userId,
       role: Role.EMPLOYEE,
+    },
+    relations: {
+      departement: true,
     },
   });
 
   if (!employee) {
-    throw new NotFoundException(`Employé "${nom_employer}" introuvable`);
-  }
-
-  // 2. Règles d'assignation selon le rôle
-  if (currentUser.role === Role.ADMIN) {
-    // ADMIN peut assigner à n'importe quel employé → OK
-  } 
-  else if (currentUser.role === Role.HOD) {
-    const deptHOD = currentUser.departement?.nom_departement;
-  const deptEmployee = employee.departement?.nom_departement;
-
-  console.log('=== DEBUG ===');
-  console.log('HOD     :', currentUser.departement);
-  console.log('Employé :', employee.departement);
-  console.log('Comparaison normalisée :', deptHOD, '===', deptEmployee);
-
-  if (!deptHOD || !deptEmployee || deptHOD !== deptEmployee) {
-    throw new ForbiddenException(
-      'Vous ne pouvez assigner une tâche qu\'à un employé de votre département',
+    throw new NotFoundException(
+      'Employé introuvable ou utilisateur non autorisé'
     );
-    // HOD ne peut assigner qu'à un employé de son département
-    // On compare les valeurs string de "departement"
-    // if (employee.departement !== currentUser.departement) {
-    //   throw new ForbiddenException(
-    //     'Vous ne pouvez assigner une tâche qu\'à un employé de votre département',
-    //   );
-    // }
-  } 
+  }
+
+  // ADMIN : peut attribuer à n'importe quel employé
+  if (currentUser.role === Role.ADMIN) {
+    const task = this.taskRepository.create({
+      ...createTaskDto,
+      user: employee,
+    });
+
+    return this.taskRepository.save(task);
+  }
+
+  // HOD : doit avoir un département
+  if (currentUser.role === Role.HOD) {
+
+    if (!currentUser.departement) {
+      throw new BadRequestException(
+        "Le HOD n'a pas de département assigné"
+      );
+    }
+
+    // Vérifier que l'employé appartient au même département
+    if (
+      !employee.departement ||
+      employee.departement.id !== currentUser.departement.id
+    ) {
+      throw new ForbiddenException(
+        "Vous ne pouvez attribuer une tâche qu'à un employé de votre département"
+      );
+    }
+
+    const task = this.taskRepository.create({
+      ...createTaskDto,
+      user: employee,
+    });
+
+    return this.taskRepository.save(task);
+  }
+
+  throw new ForbiddenException(
+    "Vous n'avez pas l'autorisation de créer une tâche"
+  );
 }
-  else {
-    throw new ForbiddenException('Seul un ADMIN ou un HOD peut créer une tâche');
-  }
-
-  // 3. Création de la tâche (attention au nom du champ : titre)
-  const task = this.taskRepository.create({
-    title: title,                
-    description: description,
-    user: employee,
-  });
-
-  return this.taskRepository.save(task);
-  }
-
 
   async findAll(filterDto: FilterTaskDto = {}, userId: number): Promise<Task[]> {
     const { status, priorite, search } = filterDto;

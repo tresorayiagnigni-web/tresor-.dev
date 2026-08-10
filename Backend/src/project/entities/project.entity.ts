@@ -22,8 +22,8 @@ export class Project {
   description?: string;
 
   // Le projet est assigné à un Département (pas à un employé)
-  @ManyToOne(() => Departments, { eager: true })
-  department?: Departments;
+  // @ManyToOne(() => Departments, { eager: true })
+  // department?: Departments;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' }) // ou 'SET NULL'
   @JoinColumn({ name: 'createdById' })
@@ -38,4 +38,15 @@ export class Project {
 
   @UpdateDateColumn()
   updatedAt?: Date;
+
+  @ManyToOne(
+    () => Departments,
+    (departement) => departement.projets,
+    {
+      nullable: false,
+      onDelete: 'CASCADE', // ou 'CASCADE' selon ton besoin
+    },
+  )
+  @JoinColumn({ name: 'departementId' })
+  departement?: Departments;
 }

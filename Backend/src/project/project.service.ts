@@ -26,26 +26,25 @@ export class ProjectsService {
       throw new ForbiddenException('Seul un ADMIN peut créer un projet');
     }
 
-    const { name, description, departmentName } = createProjectDto;
+    const { name, description, departementId } = createProjectDto;
 
-    // Trouver le département par son nom
+    // Trouver le département par son ID
     const department = await this.departmentRepository.findOne({
-      where: { nom_departement: departmentName },
+      where: { id: departementId },
     });
 
     if (!department) {
-      throw new NotFoundException(`Département "${departmentName}" introuvable`);
+      throw new NotFoundException(`Département avec l'ID ${departementId} introuvable`);
     }
 
     const project = this.projectRepository.create({
       name,
       description,
-      department,
+      departement: department,
       createdBy: currentUser,
     });
 
     return this.projectRepository.save(project);
   }
 
-  // Tu pourras ajouter findAll, findOne, etc. plus tard
 }

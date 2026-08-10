@@ -3,19 +3,11 @@ import { Role } from '../../auth/enums/role.enum';
 import { Task } from '../../tasks/entities/task.entity';
 import { Departments } from '../../departement/entities/departement.entity';
 import { Token } from '../../auth/entities/token.entity';
+import { BaseEntity } from 'src/auth/entities/baseEntity';
 
 
-
-// export enum Role {
-//   ADMIN = 'ADMIN',
-//   HOD = 'HOD',
-//   EMPLOYEE = 'EMPLOYEE',
-// }
 @Entity('users')
-export class User {
-
-  @PrimaryGeneratedColumn()
-  id?: number;
+export class User extends BaseEntity {
 
   @Column()
   nom?: string;
@@ -36,16 +28,11 @@ export class User {
   telephone?: string;
 
 
-  @UpdateDateColumn({ type: 'timestamp' })  
-
-  @CreateDateColumn()
-  createdAt?: Date;
-
   @Column({ default: true })
   status?: boolean;
 
-  @UpdateDateColumn({ type: 'timestamp', default: () => 'CURRENT_TIME'})
-  updateAt?: Date;
+  // @UpdateDateColumn({ type: 'timestamp', default: () => 'CURRENT_TIME'})
+  // updateAt?: Date;
 
   @Column({
     type: 'enum',

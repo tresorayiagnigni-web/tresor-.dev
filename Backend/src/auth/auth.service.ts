@@ -12,6 +12,7 @@ import { TokenService } from './token.service';  // ← Ajouté
 import { UsersService } from 'src/users/users.service';
 import { Role } from './enums/role.enum';
 import { RegisterDto } from './dto/register.dto';
+import { ConfigService } from '@nestjs/config';
 
 
 
@@ -24,7 +25,31 @@ export class AuthService {
     private readonly jwtService: JwtService,
 
     private readonly tokenService: TokenService,   // ← Injection ajoutée
+
+    private readonly configService: ConfigService,  // ← Injection ajoutée
   ) {}
+
+  private generateTokens(user: User) {
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    };
+  
+
+    const accessToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: (this.configService.get<string>('JWT_EXPIRES_IN') || '1h') as any,
+    });
+
+    const refreshToken = this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d') as any,
+    });
+
+    return { accessToken, refreshToken };
+  }
+
 
   async register(dto: RegisterDto) {
     const userCount = await this.usersService.count();
@@ -45,133 +70,94 @@ export class AuthService {
         telephone: dto.telephone!,
       }
     );
+    const { accessToken, refreshToken } = this.generateTokens(user);
 
-    const token = this.generateToken(user);
+    // Sauvegarder le refresh token
+    await this.tokenService.saveRefreshToken(user.id!, accessToken, refreshToken);
+
+    const token = this.generateTokens(user);
     const { password, ...result } = user;
     return {
       message: 'Compte administrateur créé avec succès',
-      access_token: token,
+      access_token: token.accessToken,
+      refresh_token: token.refreshToken,
       user: result,
     };
   }
 
-  // async register( createUserDto: CreateUserDto) {
-  //   const { email, password, ...rest } = createUserDto;
-
-  //   const existingUser = await this.userRepository.findOne({ where: { email } });
-  //   if (existingUser) {
-  //     throw new ConflictException('Un utilisateur avec cet email existe déjà');
-  //   }
-
-  //   const hashedPassword = await bcrypt.hash(password!, 10);
-
-  //   const user = this.userRepository.create({
-  //     ...createUserDto,
-  //     password: hashedPassword,
-  //   });
-
-  //   const savedUser = await this.userRepository.save(user);
-  //   delete savedUser.password;
-
-  //   return savedUser;
-  // }
-
-  /**
-   * Login mis à jour pour stocker l'access token externe
-   */
+  // ===== LOGIN =====
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email!);
     if (!user) {
       throw new UnauthorizedException('Identifiants incorrects');
     }
 
-    // Ajoute ce log temporaire pour débugger
-  console.log('User trouvé :', user);
-  console.log('Password en base :', user.password)
-
     const isPasswordValid = await bcrypt.compare(dto.password!, user.password!);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Identifiants incorrects');
     }
 
-    const token = this.generateToken(user);
+    const { accessToken, refreshToken } = this.generateTokens(user);
+
+    // Sauvegarder le refresh token
+    await this.tokenService.saveRefreshToken(user.id!,accessToken, refreshToken);
+
     const { password, ...result } = user;
 
     return {
-      access_token: token,
+      access_token: accessToken,
+      refresh_token: refreshToken,
       user: result,
     };
   }
 
-  private generateToken(user: any) {
-    return this.jwtService.sign({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    });
+  // ====================== REFRESH TOKEN ======================
+  async refresh(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token manquant');
+    }
+
+    // Vérifier que le token existe en base
+    const storedToken = await this.tokenService.findRefreshToken(refreshToken);
+    if (!storedToken) {
+      throw new UnauthorizedException('Refresh token invalide ou révoqué');
+    }
+
+    try {
+      const payload = this.jwtService.verify(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+
+      const user = await this.usersService.findById(payload.sub);
+      if (!user) {
+        throw new UnauthorizedException('Utilisateur introuvable');
+      }
+
+      // Générer de nouveaux tokens (rotation)
+      const { accessToken, refreshToken: newRefreshToken } =
+        this.generateTokens(user);
+
+      // Remplacer l'ancien refresh token
+      await this.tokenService.saveRefreshToken(user.id!, accessToken, newRefreshToken);
+
+      return {
+        access_token: accessToken,
+        refresh_token: newRefreshToken,
+      };
+    } catch (error) {
+      // Token expiré ou invalide → on le révoque
+      await this.tokenService.revokeRefreshToken(refreshToken);
+      throw new UnauthorizedException('Refresh token expiré ou invalide');
+    }
   }
-
-  //  async login(dto: LoginDto) {
-//   const { email, password } = dto;
-
-//   const user = await this.userRepository.findOne({
-//     where: { email },
-//     select: {
-//       id: true,
-//       email: true,
-//       password: true,
-//       role: true,
-//     },
-//   });
-
-//   if (!user || !user.password) {
-//     throw new UnauthorizedException('Email ou mot de passe incorrect');
-//   }
-
-//   // if (!user.status) {
-//   //   throw new UnauthorizedException('Compte inactif');
-//   // }
-
-//   const isPasswordValid = await bcrypt.compare(
-//     password!,
-//     user.password,
-//   );
-
-//   if (!isPasswordValid) {
-//     throw new UnauthorizedException('Email ou mot de passe incorrect');
-//   }
-
-//   // Création du payload
-//   const payload = {
-//     sub: user.id,
-//     email: user.email,
-//     role: user.role,
-//     departement: user.departement,
-//   };
-
-//   // Génération du JWT
-//   const accessToken = await this.jwtService.signAsync(payload);
-
-//   // Sauvegarde du JWT dans la base
-//   await this.tokenService.saveAccessToken(
-//     user.id!,
-//     accessToken,
-//   );
-
-//   return {
-//     access_token: accessToken,
-//     user: {
-//       id: user.id,
-//       email: user.email,
-//       role: user.role,
-//     },
-//   };
-// }
-
-  async logout(userId: number): Promise<void> {
+   
+  // ====================== LOGOUT ======================
+  async logout(userId: number): Promise<{ message: string }> {
     await this.tokenService.revokeToken(userId);
+    return { message: 'Déconnexion réussie' };
   }
 
+  // ====================== CHANGE PASSWORD ======================
   async changePassword(userId: number, dto: ChangePasswordDto) {
     const user = await this.usersService.findById(userId);
 
@@ -183,9 +169,11 @@ export class AuthService {
       throw new BadRequestException('Ancien mot de passe incorrect');
     }
 
-    // Hacher le nouveau mot de passe
     const salt = await bcrypt.genSalt();
     user.password = await bcrypt.hash(dto.newPassword!, salt);
+
+    // Optionnel : révoquer tous les tokens après changement de mot de passe
+    await this.tokenService.revokeToken(userId);
 
     await this.usersService.save(user);
 

@@ -1,5 +1,6 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { IsString, IsOptional, IsBoolean, IsEmpty, IsNumber } from 'class-validator';
+import { ConflictException, NotFoundException, BadRequestException, Injectable } from '@nestjs/common';
+import { InjectRepository} from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Departments } from './entities/departement.entity';
 import { CreateDepartmentDto } from './dto/create-departement.dto';
@@ -7,6 +8,7 @@ import { UpdateDepartmentDto } from './dto/update-departement.dto';
 import { AssignChefDto } from './dto/assign-chef.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/auth/enums/role.enum';
+import { id } from 'node_modules/date-fns/locale/id';
 
 @Injectable()
 export class DepartmentService {
@@ -18,103 +20,156 @@ export class DepartmentService {
     private usersRepository: Repository<User>,
   ) {}
 
+  //   async create(createDepartmentDto: CreateDepartmentDto) {
+  //   const { nom_departement, description } = createDepartmentDto;
+
+  //   // Vérifier que le département n'existe pas déjà
+  //   const existing = await this.departmentRepository.findOne({
+  //     where: { nom_departement },
+  //   });
+
+  //   if (existing) {
+  //     throw new ConflictException('Ce département existe déjà');
+  //   }
+
+  //   // Créer le département sans chef
+  //   const department = this.departmentRepository.create({
+  //     nom_departement,
+  //     description,
+  //     // pas de chef_departement
+  //   });
+
+  //   return this.departmentRepository.save(department);
+// }
+
   async create(createDepartmentDto: CreateDepartmentDto) {
-    const { nom_departement, description, chef_departement } = createDepartmentDto;
+    const { nom_departement, description, chef_departementId } = createDepartmentDto;
+
     const existing = await this.departmentRepository.findOne({
-      where: { nom_departement: createDepartmentDto.nom_departement },
+      where: { nom_departement },
     });
 
-     if (existing) {
+    if (existing) {
       throw new ConflictException('Ce département existe déjà');
     }
 
     let chef: User | null = null;
 
-    // 2. Si un chef est fourni, on le récupère et on vérifie
-    if (chef_departement) {
+   // Seulement si un chef est fourni
+    if (chef_departementId) {
       chef = await this.usersRepository.findOne({
-        where: { nom: chef_departement },
-        relations: {departement: true},
+        where: { id: chef_departementId },
+        relations: { departement: true },
       });
+
+      if (!chef) {
+        throw new NotFoundException('Employé introuvable');
+      }
+
+      if (chef.role === Role.ADMIN) {
+        throw new BadRequestException('Un administrateur ne peut pas être chef de département');
+      }
     }
 
-    if (!chef) {
-      throw new NotFoundException('Employé introuvable');
-    }
-
-    if (chef.role === Role.ADMIN) {
-      throw new BadRequestException('Un administrateur ne peut pas être chef de département');
-    }
-
-    // Vérifier qu'il n'est pas déjà chef d'un autre département
-    const dejaChef = await this.departmentRepository.findOne({
-      where: { chef_departement: { nom: chef.nom } },
-    });
-
-    if (dejaChef) {
-      throw new BadRequestException(
-        `Cet employé est déjà chef du département "${dejaChef.nom_departement}"`,
-      );
-    }
 
     const department = this.departmentRepository.create({
-    nom_departement,
-    description,
-    chef_departement: chef ?? null,
-  });
+      nom_departement,
+      description,
+      chef_departement: chef_departementId ? chef : null,
+    });
 
-  const savedDepartment = await this.departmentRepository.save(department);
+    const savedDepartment = await this.departmentRepository.save(department);
 
-  // 4. Si un chef a été nommé → passer son rôle à HOD
-  //    et l'assigner à ce département
-  if (chef) {
-    chef.role = Role.HOD;
-    chef.departement = savedDepartment;
-    await this.usersRepository.save(chef);
+    // Si un chef a été nommé → passer son rôle à HOD
+    if (chef) {
+      chef.role = Role.HOD;
+      chef.departement = savedDepartment;
+      await this.usersRepository.save(chef);
+    }
+
+    return this.departmentRepository.findOne({
+      where: { id: savedDepartment.id },
+      relations: {chef_departement:true},
+    });  
   }
-
-  // 5. Recharger avec la relation
-  const result = await this.departmentRepository.findOne({
-    where: { id: savedDepartment.id },
-    relations: {chef_departement: true},
-  });
-
-  return result;
-}
   
-
-   
-
-  
-
   async findAll() {
-    return this.departmentRepository.find({});
-  }
-
-  async findOne(nom_depatement: string) {
-    const department = await this.departmentRepository.findOne({
-      where: { nom_departement: nom_depatement },
+    return this.departmentRepository.find({
       relations: { chef_departement: true },
     });
-    if (!department) throw new NotFoundException('Département non trouvé');
+  }
+    
+
+  async findOne(id: number) {
+    const department = await this.departmentRepository.findOne({
+      where: { id },
+      relations: { chef_departement: true },
+    });
+    if (!department) {
+      throw new NotFoundException('Département non trouvé');
+    }
     return department;
   }
 
-  async update(nom_departement: string, updateDepartmentDto: UpdateDepartmentDto) {
-    const department = await this.findOne(nom_departement);
-    Object.assign(department, updateDepartmentDto);
-    return this.departmentRepository.save(department);
+  async update(id: number, updateDepartmentDto: UpdateDepartmentDto) {
+  const department = await this.departmentRepository.findOne({
+    where: { id },
+    relations: { chef_departement: true },
+  });
+
+  if (!department) {
+    throw new NotFoundException('Département introuvable');
   }
 
-  async remove(nom_departement: string) {
-    const department = await this.findOne(nom_departement);
+  // Si on change le chef
+  if (updateDepartmentDto.chef_DepartementId) {
+    const nouveauChef = await this.usersRepository.findOne({
+      where: { id: updateDepartmentDto.chef_DepartementId },
+    });
+
+    if (!nouveauChef) {
+      throw new NotFoundException('Employé introuvable');
+    }
+
+    // Rétrograder l'ancien chef
+    if (department.chef_departement) {
+      department.chef_departement.role = Role.EMPLOYEE;
+      await this.usersRepository.save(department.chef_departement);
+    }
+
+    // Nommer le nouveau
+    department.chef_departement = nouveauChef;
+    nouveauChef.role = Role.HOD;
+    await this.usersRepository.save(nouveauChef);
+  }
+
+  // Autres champs (nom, description…)
+  if (updateDepartmentDto.nom_departement) {
+    department.nom_departement = updateDepartmentDto.nom_departement;
+  }
+  if (updateDepartmentDto.description !== undefined) {
+    department.description = updateDepartmentDto.description;
+  }
+
+  return this.departmentRepository.save(department);
+}
+
+
+  async remove(id: number): Promise<{ message: string }> {
+    const department = await this.departmentRepository.findOne({
+      where: { id },
+    });
+
+    if (!department) {
+      throw new NotFoundException('Département introuvable');
+    }
     await this.departmentRepository.remove(department);
     return { message: 'Département supprimé avec succès' };
   }
 
-  async assignChef(nom_departement: string, nom: string) {
+  async assignChef(departementId: number, chef_DepartementId: number) {
   const departement = await this.departmentRepository.findOne({
-    where: { nom_departement: nom_departement },
+    where: { id: departementId },
     relations: {chef_departement: true},
   });
 
@@ -123,7 +178,7 @@ export class DepartmentService {
   }
 
   const user = await this.usersRepository.findOne({
-    where: { nom: nom, status: true },
+    where: { id: chef_DepartementId, status: true },
     relations: {departement: true},
   });
 
@@ -202,53 +257,4 @@ export class DepartmentService {
 }
 
 
-  // async assignChef(departementId: number, dto: AssignChefDto) {
-    
-  // const departement = await this.departmentRepository.findOne({
-  //   where: { id: departementId }
-  // });
-
-  // if (!departement) {
-  //   throw new NotFoundException('Département non trouvé');
-  // }
-
-  // const user = await this.usersRepository.findOne({
-  //   where: { 
-  //     nom: dto.nom, 
-  //     status: true 
-  //   }
-  // });
-
-  // if (!user) {
-  //   throw new BadRequestException('Utilisateur non trouvé ou inactif');
-  // }
-
-  // // === Mise à jour automatique du rôle ===
-  // // Sauvegarder l'ancien rôle
-  // const ancienRole = user.role;
-
-  // // Modifier le rôle
-  // user.role = Role.HOD;   
-  // await this.usersRepository.save(user);                
-
-  // // Assigner le chef au département
-  // departement.chef_departement = user;
-
-  // // Sauvegarder les deux entités
-  // await this.usersRepository.save(user);           // ← Mise à jour du rôle
-  // await this.departmentRepository.save(departement);
-
-  // return {
-  //   message: `L'utilisateur ${user.nom || ''} a été nommé Chef de Département.`,
-  //   details: {
-  //     ancienRole,
-  //     nouveauRole: user.role
-  //   },
-  //   departement: {
-  //     id: departement.id,
-  //     nom_departement: (departement as any).nom,
-  //     chef_departement: `${user.nom || ''}`.trim(),
-  //   }
-  // }
-  // };
 }

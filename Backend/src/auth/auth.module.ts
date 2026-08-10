@@ -27,7 +27,7 @@ import { TokenModule } from './token.module';
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get('JWT_SECRET'),
         signOptions: { 
-          expiresIn: '7d'   // ou '24h', '7d', etc.
+          expiresIn: configService.get('JWT_EXPIRES_IN')
         },
       }),
     }),

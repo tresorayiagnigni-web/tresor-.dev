@@ -2,12 +2,10 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { User } from '../../users/entities/user.entity';
 import { TaskStatus } from '../enums/task-status.enum';
 import { TaskPriority } from '../enums/task-priority.enum';
+import { BaseEntity } from "src/auth/entities/baseEntity";
 
 @Entity('tasks')
-export class Task {
-
-    @PrimaryGeneratedColumn()
-    id?: number;
+export class Task extends BaseEntity {
 
     @Column()
     title?: string;
@@ -22,17 +20,15 @@ export class Task {
     })
     status?: TaskStatus;
 
-    @UpdateDateColumn({ nullable: true })
-    date_modif?: Date;
 
     @Column({
-    type: 'enum',
-    enum: TaskPriority,
-    default: 'Moyen',
-    name: 'priorite',          
-    nullable: false,
-  })
-  priority?: string;
+        type: 'enum',
+        enum: TaskPriority,
+        default: 'Moyen',
+        name: 'priorite',          
+        nullable: false,
+    })
+    priority?: string;
 
     @Column()
     userId?: number;
@@ -43,9 +39,6 @@ export class Task {
     })
     @JoinColumn({ name: 'userId' })
     user?: User;
-
-    @CreateDateColumn()
-    Date_creation?: Date;
 
     @Column({ nullable: true })
     Date_limite?: Date;

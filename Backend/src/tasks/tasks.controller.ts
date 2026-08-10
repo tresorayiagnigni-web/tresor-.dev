@@ -27,16 +27,6 @@ export class TasksController {
   ) {
   return this.tasksService.create(createTaskDto, currentUser);
 }
-  // @UseGuards(AuthGuard('jwt'))
-  // @Post()
-  // @Roles( Role.HOD, Role.ADMIN)
-  // async createtasks(@Body() createTaskDto: any, @Request() req) {
-  //   // req.user est maintenant défini grâce au Guard !
-  //   const userId = req.user.id; 
-    
-  //   return this.tasksService.create(createTaskDto, userId);
-  // }
-
 
   @Get()
 async findAll(@Query() filterDto: FilterTaskDto, @Req() req: any) {

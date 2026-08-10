@@ -1,19 +1,25 @@
-import { Entity, Column, PrimaryGeneratedColumn, Index, CreateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, Index, CreateDateColumn, JoinColumn, ManyToOne } from 'typeorm';
+// import { BaseEntity } from './baseEntity';
+import { User } from 'src/users/entities/user.entity';
 
 @Entity('tokens')
 export class Token {
-  @PrimaryGeneratedColumn()
+
+  @PrimaryGeneratedColumn()          // ← OBLIGATOIRE
   id?: number;
 
   @Column()
   @Index()
   userId?: number;
 
+  @Column({ type: 'text' })
+  refreshToken?: string;
+
   @Column({ length: 500 })
   accessToken?: string;
 
-  // @Column({ type: 'timestamp', nullable: false })
-  // expire_le?: Date;
+  @CreateDateColumn({ type: 'timestamp', precision: null, default: () => 'CURRENT_TIMESTAMP' })
+  cree_le?: Date;
 
   @Column({
   type: 'datetime',
@@ -27,6 +33,9 @@ export class Token {
   })
   status?: boolean;
 
-  @CreateDateColumn({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  cree_le?: Date;
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'userId' })
+  user?: User;
+
+
 }
