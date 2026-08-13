@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Token } from './entities/token.entity';
-import { addHours } from 'date-fns';
+import { addHours, addMinutes } from 'date-fns';
+import { addSeconds } from 'date-fns/addSeconds';
 
 @Injectable()
 export class TokenService {
@@ -17,7 +18,7 @@ export class TokenService {
     refreshToken: string,
   ): Promise<Token> {
 
-    const expires_le = addHours(new Date(), 24);
+    const expires_le = addMinutes(new Date(), 15);
 
     // Désactiver les anciens tokens
     await this.tokenRepository.update(
@@ -33,7 +34,7 @@ export class TokenService {
       userId,
       accessToken,
       refreshToken,
-      expire_le: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 heures
+      expire_le: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
       status: false,
     });
 
@@ -82,6 +83,7 @@ export class TokenService {
     const token = this.tokenRepository.create({
       userId,
       refreshToken,
+      accessToken,
       expire_le: expireDate, // ou une autre logique pour définir la date d'expiration
       status: true,
     });

@@ -28,5 +28,10 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
 
   console.log(`Application is running on: ${await app.getUrl()}`);
+
+  app.enableCors({
+  origin: 'http://localhost:3000', // URL de ton frontend
+  credentials: true,
+  });
 }
 bootstrap();
