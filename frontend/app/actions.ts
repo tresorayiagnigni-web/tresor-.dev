@@ -34,7 +34,8 @@ export async function loginUser(prevState: any, formData: FormData): Promise<Log
 
   try {
     // 2. Fetch request to backend
-    response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/login`, {
+    // response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/login`, {
+    response = await fetch(`http://localhost:3001/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),

@@ -37,7 +37,7 @@ import {
   type UserStatus,
 } from '@/lib/actions/userActions';
 import { getDepartments, type Department } from '@/lib/actions/departmentActions';
-import { showSuccess, formatDate } from '@/lib/helpers/adminHelpers';
+import { showSuccess, formatDate, fetchAllData } from '@/lib/helpers/adminHelpers';
 
 // ===== TYPE DEFINITIONS =====
 interface CreateUserFormData {
@@ -81,7 +81,7 @@ const UsersPage: React.FC = () => {
     nom: '',
     email: '',
     telephone: '',
-    role: 'EMPLOYER',
+    role: 'EMPLOYEE',
     departement: '',
     password: '',
   });
@@ -90,7 +90,7 @@ const UsersPage: React.FC = () => {
     nom: '',
     email: '',
     telephone: '',
-    role: 'EMPLOYER',
+    role: 'EMPLOYEE',
     departement: '',
     status: 'true',
   });
@@ -115,9 +115,29 @@ const UsersPage: React.FC = () => {
     setIsLoading(false);
   };
 
+  // useEffect(() => {
+  //   loadData();
+  // }, []);
   useEffect(() => {
-    loadData();
-  }, []);
+      let cancelled = false;
+  
+      const loadData = async () => {
+        setIsLoading(true);
+        const result = await fetchAllData();
+        if (!cancelled) return;
+  
+        setUsers(result.users);
+        setTimeout(() => {
+          setDepartments(result.departments);
+          if (result.error) setError(result.error);
+          setIsLoading(false);
+        }, 1000);
+      };  
+      loadData();
+      return () => {
+        cancelled = true;
+      };
+    }, []);
 
   // ===== DERIVED STATE =====
   const filteredUsers = users.filter(user => {
@@ -136,16 +156,16 @@ const UsersPage: React.FC = () => {
   const suspendedUsers = users.filter(u => u.status === 'false' || u.status === false).length;
   const adminCount = users.filter(u => u.role === 'ADMIN').length;
   const hodCount = users.filter(u => u.role === 'HOD').length;
-  const employeeCount = users.filter(u => u.role === 'EMPLOYER').length;
+  const employeeCount = users.filter(u => u.role === 'EMPLOYEE').length;
 
   // ===== HELPERS =====
   const getRoleBadge = (role: UserRole | undefined) => {
     const config = {
       ADMIN: { bg: 'bg-blue-100', text: 'text-blue-800', icon: <Shield size={14} className="mr-1" />, label: 'Admin' },
       HOD: { bg: 'bg-purple-100', text: 'text-purple-800', icon: <UserCog size={14} className="mr-1" />, label: 'HOD' },
-      EMPLOYER: { bg: 'bg-gray-100', text: 'text-gray-800', icon: <Users size={14} className="mr-1" />, label: 'Employee' },
+      EMPLOYEE: { bg: 'bg-gray-100', text: 'text-gray-800', icon: <Users size={14} className="mr-1" />, label: 'Employee' },
     };
-    return config[role || 'EMPLOYER'];
+    return config[role || 'EMPLOYEE'];
   };
 
   const getStatusBadge = (status: UserStatus | boolean | undefined) => {
@@ -170,7 +190,7 @@ const UsersPage: React.FC = () => {
       nom: '',
       email: '',
       telephone: '',
-      role: 'EMPLOYER',
+      role: 'EMPLOYEE',
       departement: '',
       password: '',
     });
@@ -218,7 +238,7 @@ const UsersPage: React.FC = () => {
       nom: user.nom || '',
       email: user.email || '',
       telephone: user.telephone || '',
-      role: user.role || 'EMPLOYER',
+      role: user.role || 'EMPLOYEE',
       departement: user.departement || '',
       status: user.status === 'true' || user.status === true ? 'true' : 'false',
     });

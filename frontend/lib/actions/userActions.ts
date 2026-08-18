@@ -2,6 +2,7 @@
 
 'use server';
 
+import { ApiError } from 'next/dist/server/api-utils';
 import { cookies } from 'next/headers';
 
 export type UserRole = 'ADMIN' | 'HOD' | 'EMPLOYER';
@@ -94,7 +95,7 @@ export async function getUsers(): Promise<ApiResponse<User[]>> {
   try {
     const headers = await getHeaders();
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users/employees`, {
       method: 'GET',
       headers,
     });
@@ -131,11 +132,19 @@ export async function getUserById(userId: number): Promise<ApiResponse<User>> {
 export async function createUser(input: CreateUserInput): Promise<ApiResponse<User>> {
   try {
     const headers = await getHeaders();
+    const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users`, {
+    // const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users`, {
+    const response = await fetch(`${API_URL}/users/employee`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(input),
+      body: JSON.stringify({
+        nom: input.nom,
+        email: input.email,
+        password: input.password,
+        telephone: input.telephone,
+        departementId: Number(input.departement ?? input.departement),
+      }),
     });
 
     return await handleResponse(response);

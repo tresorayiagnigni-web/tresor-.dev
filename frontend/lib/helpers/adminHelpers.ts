@@ -142,7 +142,7 @@ export const createNewDepartment = async (data: { nom_departement: string; descr
   }
 };
 
-export const updateExistingDepartment = async (id: number, data: { nom_departement: string; description?: string }) => {
+export const updateExistingDepartment = async (id: number, data: { nom_departement: string; description?: string, chef_DepartementId?: number }) => {
   try {
     const result = await updateDepartment(id, {
       nom_departement: data.nom_departement,
@@ -165,9 +165,9 @@ export const deleteExistingDepartment = async (id: number) => {
   }
 };
 
-export const assignHOD = async (departmentId: number, userId: number) => {
+export const assignHOD = async (departmentId: number, chef_DepartementId: number) => {
   try {
-    const result = await assignDepartmentHead(departmentId, userId);
+    const result = await assignDepartmentHead(departmentId, chef_DepartementId);
     return result;
   } catch (error) {
     console.error('Error assigning HOD:', error);

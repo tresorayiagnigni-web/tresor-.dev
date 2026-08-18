@@ -103,7 +103,7 @@ const AdminActivityPage: React.FC = () => {
 
     return {
       id: task.id?.toString() || '',
-      title: task.titre || '',
+      title: task.title || '',
       department: department?.nom_departement || assignedUser?.departement || 'Unassigned',
       assignedPersonnel: assignedUser?.nom || 'Unassigned',
       dueDate: task.Date_limite || '',
@@ -123,7 +123,7 @@ const AdminActivityPage: React.FC = () => {
         activities.push({
           id: `task-created-${task.id}`,
           type: 'task-created',
-          description: `${creator?.nom || 'Someone'} created task '${task.titre}'`,
+          description: `${creator?.nom || 'Someone'} created task '${task.title}'`,
           timestamp: task.cree_le,
         });
       }

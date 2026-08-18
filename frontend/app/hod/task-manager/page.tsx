@@ -34,7 +34,7 @@ import { getDepartmentById, type Department } from '@/lib/actions/departmentActi
 
 // ========== TYPE DEFINITIONS ==========
 interface TaskFormData {
-  titre: string;
+  title: string;
   description: string;
   Date_limite: string;
   priorite: TaskPriority;
@@ -60,7 +60,7 @@ const HODTaskManagerPage: React.FC = () => {
 
   // Form data
   const [formData, setFormData] = useState<TaskFormData>({
-    titre: '',
+    title: '',
     description: '',
     Date_limite: '',
     priorite: 'Moyen',
@@ -190,7 +190,7 @@ const HODTaskManagerPage: React.FC = () => {
   // ========== MODAL HANDLERS ==========
   const openCreateModal = () => {
     setFormData({
-      titre: '',
+      title: '',
       description: '',
       Date_limite: '',
       priorite: 'Moyen',
@@ -206,7 +206,7 @@ const HODTaskManagerPage: React.FC = () => {
   const openEditModal = (task: Task) => {
     setSelectedTask(task);
     setFormData({
-      titre: task.titre || '',
+      title: task.title || '',
       description: task.description || '',
       Date_limite: task.Date_limite || '',
       priorite: task.priorite || 'Moyen',
@@ -237,7 +237,7 @@ const HODTaskManagerPage: React.FC = () => {
     setError(null);
 
     const result = await createTask({
-      titre: formData.titre,
+      title: formData.title,
       description: formData.description,
       Date_limite: formData.Date_limite,
       priorite: formData.priorite,
@@ -246,7 +246,7 @@ const HODTaskManagerPage: React.FC = () => {
     });
 
     if (result.success && result.data) {
-      showSuccess(`Task "${result.data.titre}" created successfully!`);
+      showSuccess(`Task "${result.data.title}" created successfully!`);
       closeCreateModal();
       loadData();
     } else {
@@ -262,7 +262,7 @@ const HODTaskManagerPage: React.FC = () => {
     setError(null);
 
     const result = await updateTask(selectedTask.id!, {
-      titre: formData.titre,
+      title: formData.title,
       description: formData.description,
       Date_limite: formData.Date_limite,
       priorite: formData.priorite,
@@ -270,7 +270,7 @@ const HODTaskManagerPage: React.FC = () => {
     });
 
     if (result.success && result.data) {
-      showSuccess(`Task "${result.data.titre}" updated successfully!`);
+      showSuccess(`Task "${result.data.title}" updated successfully!`);
       closeEditModal();
       loadData();
     } else {
@@ -396,7 +396,7 @@ const HODTaskManagerPage: React.FC = () => {
                     <tr key={task.id} className="hover:bg-gray-50/50 transition duration-150">
                       <td className="py-3.5 px-6">
                         <div>
-                          <div className="text-[#1F2937] font-medium">{task.titre}</div>
+                          <div className="text-[#1F2937] font-medium">{task.title}</div>
                           <div className="text-xs text-[#6B7280] mt-0.5 truncate max-w-[200px]">
                             {task.description}
                           </div>
@@ -485,9 +485,9 @@ const HODTaskManagerPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  id="titre"
-                  name="titre"
-                  value={formData.titre}
+                  id="title"
+                  name="title"
+                  value={formData.title}
                   onChange={handleFormChange}
                   placeholder="Enter task title"
                   className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
@@ -623,8 +623,8 @@ const HODTaskManagerPage: React.FC = () => {
                 <input
                   type="text"
                   id="edit-titre"
-                  name="titre"
-                  value={formData.titre}
+                  name="title"
+                  value={formData.title}
                   onChange={handleFormChange}
                   placeholder="Enter task title"
                   className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"

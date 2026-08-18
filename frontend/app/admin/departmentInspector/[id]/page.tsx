@@ -30,7 +30,7 @@ import { formatDate } from '@/lib/helpers/adminHelpers';
 interface Department {
   id?: number;
   nom_departement: string;
-  chef_departementId?: number;
+  chef_departement?: string;
   description?: string;
   cree_le?: string;
   isActive?: boolean;
@@ -90,12 +90,12 @@ const DepartmentInspectorPage: React.FC = () => {
 
   // ===== DERIVED STATE =====
   // Get HOD details
-  const hod = department?.chef_departementId 
-    ? users.find(u => u.id === department.chef_departementId) 
+  const hod = department?.chef_departement 
+    ? users.find(u => u.id === department.chef_departement) 
     : null;
 
   // Get employees in this department
-  const employees = users.filter(u => u.departmentId === department?.id);
+  const employees = users.filter(u => u.departement?.id === department?.id);
 
   // Get tasks for users in this department
   const employeeIds = employees.map(e => e.id).filter((id): id is number => id !== undefined);
@@ -459,7 +459,7 @@ const DepartmentInspectorPage: React.FC = () => {
                   return (
                     <tr key={task.id} className="hover:bg-gray-50/50 transition duration-150">
                       <td className="py-3.5 px-6">
-                        <span className="font-medium text-[#1F2937]">{task.titre}</span>
+                        <span className="font-medium text-[#1F2937]">{task.title}</span>
                       </td>
                       <td className="py-3.5 px-6 text-[#6B7280]">
                         {assignedUser?.nom || 'Unassigned'}

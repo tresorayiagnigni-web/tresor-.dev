@@ -2,6 +2,7 @@
 
 'use client';
 
+import { getDepartements } from '@/lib/api/departement';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppLayout } from '@/app/layout/AppLayout';
@@ -21,6 +22,7 @@ import {
   Mail,
   User,
 } from 'lucide-react';
+import { assignDepartmentHead } from '@/lib/actions/departmentActions';
 import { type Department } from '@/lib/actions/departmentActions';
 import { type User as ApiUser } from '@/lib/actions/userActions';
 import {
@@ -34,11 +36,12 @@ import {
   formatDate,
 } from '@/lib/helpers/adminHelpers';
 
+
 // ========== TYPE DEFINITIONS ==========
 interface DepartmentFormData {
   nom_departement: string;
   description: string;
-  chef_departementId: string;
+  chef_DepartementId: string;
 }
 
 // ========== MAIN COMPONENT ==========
@@ -63,13 +66,13 @@ const DepartmentsPage: React.FC = () => {
   const [formData, setFormData] = useState<DepartmentFormData>({
     nom_departement: '',
     description: '',
-    chef_departementId: '',
+    chef_DepartementId: '',
   });
 
   const [editFormData, setEditFormData] = useState<DepartmentFormData>({
     nom_departement: '',
     description: '',
-    chef_departementId: '',
+    chef_DepartementId: '',
   });
 
   // ========== LOAD DATA ==========
@@ -106,17 +109,39 @@ const DepartmentsPage: React.FC = () => {
   });
 
   // Get HOD users (users with role HOD)
-  const hodUsers = users.filter((u) => u.role === 'HOD');
+  // const hodUsers = users.filter((u) => u.role === 'HOD');
 
-  // Get available HOD users (not already assigned as HOD to another department)
-  const getAvailableHODs = (currentDepartmentId?: number) => {
-    const assignedHODIds = departments
-      .filter((d) => d.id !== currentDepartmentId)
-      .map((d) => d.chef_departementId)
-      .filter((id): id is number => id !== undefined && id !== null);
+  // // Get available HOD users (not already assigned as HOD to another department)
+  // const getAvailableHODs = (currentDepartmentId?: number) => {
+  //   const assignedHODIds = departments
+  //     .filter((d) => d.id !== currentDepartmentId)
+  //     .map((d) => d.chef_DepartementId)
+  //     .filter((id): id is number => id !== undefined && id !== null);
 
-    return hodUsers.filter((u) => !assignedHODIds.includes(u.id!));
+  //   return hodUsers.filter((u) => !assignedHODIds.includes(u.id!));
+  // };
+  console.log("ID département sélectionné :", selectedDepartment?.id);
+  console.log("UTILISATEURS :", users);
+  console.log(
+  "MEMBRES DU DEPARTEMENT :",
+  users.filter(
+    (user) => Number(user.departementId) === Number(selectedDepartment?.id)
+  )
+);
+
+  const getDepartmentMembers = (departmentId?: number) => {
+  if (!departmentId) return [];
+
+  return users.filter(
+    (user) => Number(user.departementId) === Number(departmentId)
+  );
   };
+
+  const availableUsers = users.filter(
+  (user) =>
+    user.role === "EMPLOYEE" &&
+    Number(user.departementId) === Number(selectedDepartment)
+);
 
   // ========== HELPER FUNCTIONS ==========
   const getStatusBadge = (status: 'active' | 'inactive' | boolean | undefined) => {
@@ -139,8 +164,8 @@ const DepartmentsPage: React.FC = () => {
   };
 
   const getHODName = (department: Department) => {
-    if (!department.chef_departementId) return 'Unassigned';
-    const hod = users.find((u) => u.id === department.chef_departementId);
+    if (!department.chef_DepartementId) return 'Unassigned';
+    const hod = users.find((u) => u.id === department.chef_DepartementId);
     return hod?.nom || 'Unknown';
   };
 
@@ -153,7 +178,7 @@ const DepartmentsPage: React.FC = () => {
     setFormData({
       nom_departement: '',
       description: '',
-      chef_departementId: '',
+      chef_DepartementId: '',
     });
     setIsCreateModalOpen(true);
   };
@@ -167,7 +192,7 @@ const DepartmentsPage: React.FC = () => {
     setEditFormData({
       nom_departement: department.nom_departement || '',
       description: department.description || '',
-      chef_departementId: department.chef_departementId?.toString() || '',
+      chef_DepartementId: department.chef_DepartementId?.toString() || '',
     });
     setIsEditModalOpen(true);
   };
@@ -203,8 +228,8 @@ const DepartmentsPage: React.FC = () => {
     });
 
     if (result.success && result.data) {
-      if (formData.chef_departementId) {
-        const assignResult = await assignHOD(result.data.id!, parseInt(formData.chef_departementId));
+      if (formData.chef_DepartementId) {
+        const assignResult = await assignHOD(result.data.id!, parseInt(formData.chef_DepartementId));
         if (assignResult.success) {
           showSuccess(setSuccessMessage, `Department created with HOD assigned successfully!`);
         }
@@ -228,11 +253,12 @@ const DepartmentsPage: React.FC = () => {
     const result = await updateExistingDepartment(selectedDepartment.id!, {
       nom_departement: editFormData.nom_departement,
       description: editFormData.description,
+      chef_DepartementId: editFormData.chef_DepartementId ? parseInt(editFormData.chef_DepartementId) : undefined,
     });
 
     if (result.success && result.data) {
-      const currentHODId = selectedDepartment.chef_departementId;
-      const newHODId = editFormData.chef_departementId ? parseInt(editFormData.chef_departementId) : null;
+      const currentHODId = selectedDepartment.chef_DepartementId;
+      const newHODId = editFormData.chef_DepartementId ? parseInt(editFormData.chef_DepartementId) : null;
 
       if (newHODId !== currentHODId) {
         if (newHODId) {
@@ -284,6 +310,30 @@ const DepartmentsPage: React.FC = () => {
     const { name, value } = e.target;
     setEditFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+//   const handleAssignChef = async (departementId: number, chefId: number) => {
+//   const result = await assignDepartmentHead(departementId, chefId);
+//   if (result.success) {
+//     // recharger les données
+//     await loadData();
+//   } else {
+//     setError(result.success);
+//   }
+// };
+
+const handleAssignChef = async (
+  departementId: number,
+  chefId: number
+) => {
+  const result = await assignDepartmentHead(departementId, chefId);
+
+  if (result.success) {
+    // recharger les données
+    await loadData();
+  } else {
+    setError(result.message || "Erreur lors de l'attribution du chef");
+  }
+};
 
   // ========== RENDER ==========
   return (
@@ -357,8 +407,8 @@ const DepartmentsPage: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDepartments.map((department) => {
-                const employeeCount = getEmployeeCount(department);
-                const hodName = getHODName(department);
+                const employeeCount = department.nombre_de_membre ?? 0;
+                const hodName = department.chef_departement?.nom || 'Unassigned';
                 const statusConfig = getStatusBadge(department.isActive);
 
                 return (
@@ -497,20 +547,20 @@ const DepartmentsPage: React.FC = () => {
                 />
               </div>
 
-              <div>
+             <div>
                 <label htmlFor="chef_departementId" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                   Head of Department
                 </label>
                 <select
                   id="chef_departementId"
                   name="chef_departementId"
-                  value={formData.chef_departementId}
+                  value={formData.chef_DepartementId}
                   onChange={handleFormChange}
                   className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                   disabled={isSubmitting}
                 >
-                  <option value="">Select HOD (optional)</option>
-                  {getAvailableHODs().map((user) => (
+                  <option value="">Select Head of Department (optional)</option>
+                  {getDepartmentMembers(selectedDepartment?.id).map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.nom} ({user.email})
                     </option>
@@ -602,22 +652,22 @@ const DepartmentsPage: React.FC = () => {
                   Head of Department
                 </label>
                 <select
-                  id="edit-chef_departementId"
-                  name="chef_departementId"
-                  value={editFormData.chef_departementId}
+                  id="edit-chef_DepartementId"
+                  name="chef_DepartementId"
+                  value={editFormData.chef_DepartementId}
                   onChange={handleEditFormChange}
                   className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                   disabled={isSubmitting}
                 >
-                  <option value="">Select HOD (optional)</option>
-                  {getAvailableHODs(selectedDepartment.id).map((user) => (
+                  <option value="">Select Head of Department(optional)</option>
+                  {getDepartmentMembers(selectedDepartment.id).map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.nom} ({user.email})
                     </option>
                   ))}
                 </select>
                 <p className="mt-1.5 text-xs text-[#6B7280]">
-                  Only users with HOD role can be selected. Only unassigned HODs are shown.
+                   Members of this department can be selected as Head of Department.
                 </p>
               </div>
 

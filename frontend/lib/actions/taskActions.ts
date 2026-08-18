@@ -10,7 +10,7 @@ export type TaskPriority = 'Bas' | 'Moyen' | 'Elevee';
 
 export interface Task {
   id?: number;
-  titre: string;
+  title: string;
   description?: string;
   status: TaskStatus;
   priorite: TaskPriority;
@@ -26,7 +26,7 @@ export interface Task {
 }
 
 export interface CreateTaskInput {
-  titre: string;
+  title: string;
   description?: string;
   status?: TaskStatus;
   priorite?: TaskPriority;
@@ -35,7 +35,7 @@ export interface CreateTaskInput {
 }
 
 export interface UpdateTaskInput {
-  titre?: string;
+  title?: string;
   description?: string;
   status?: TaskStatus;
   priorite?: TaskPriority;
@@ -108,7 +108,8 @@ export async function getTasks(filters?: FilterTaskDto): Promise<ApiResponse<Tas
     if (filters?.priority) queryParams.append('priority', filters.priority);
     if (filters?.search) queryParams.append('search', filters.search);
     
-    const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    // const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `http://localhost:3001/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     
     const response = await fetch(url, {
       method: 'GET',
@@ -150,7 +151,7 @@ export async function getTaskById(taskId: number): Promise<ApiResponse<Task>> {
 
 export async function createTask(input: CreateTaskInput): Promise<ApiResponse<Task>> {
   try {
-    if (!input.titre?.trim()) {
+    if (!input.title?.trim()) {
       return {
         success: false,
         message: 'Task title is required',
@@ -170,9 +171,9 @@ export async function createTask(input: CreateTaskInput): Promise<ApiResponse<Ta
     
     const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks`, {
       method: 'POST',
-      headers,
+      headers: await getHeaders(),
       body: JSON.stringify({
-        titre: input.titre.trim(),
+        title: input.title.trim(),
         description: input.description?.trim() || '',
         status: input.status || 'A_faire',
         priorite: input.priorite || 'Moyen',
@@ -208,7 +209,7 @@ export async function updateTask(taskId: number, input: UpdateTaskInput): Promis
       method: 'PUT',
       headers,
       body: JSON.stringify({
-        titre: input.titre?.trim(),
+        title: input.title?.trim(),
         description: input.description?.trim(),
         status: input.status,
         priorite: input.priorite,

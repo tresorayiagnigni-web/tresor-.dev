@@ -3,6 +3,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { apiFetch } from '../api/api';
 
 // ========== TYPE DEFINITIONS ==========
 export interface Department {
@@ -13,12 +14,23 @@ export interface Department {
   cree_le?: string;
   isActive?: boolean;
   code?: string;
-  chef_departement?: string;
+  chef_departement?: {
+    id: number;
+    nom: string;
+    email: string;
+    telephone: string;
+    status: boolean;
+    role: string;
+  } | null;
+
+  nombre_de_membre: number;
 }
+
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export interface CreateDepartmentInput {
   nom_departement: string;
-  chef_departementId?: number;
+  // chef_departementId?: number;
   description?: string;
 }
 
@@ -87,6 +99,7 @@ const normalizeDepartment = (dept: any): Department => {
     isActive: dept.isActive !== undefined ? dept.isActive : true,
     code: dept.code,
     chef_departement: dept.chef_departement,
+    nombre_de_membre: dept.nombre_de_membre,
   };
 };
 
@@ -96,9 +109,12 @@ export async function getDepartments(): Promise<ApiResponse<Department[]>> {
   try {
     const headers = await getHeaders();
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/departments`, {
+    const response = await fetch(`${API_URL}/departments`, {
       method: 'GET',
-      headers,
+      headers: {
+       'Content-Type': 'application/json',
+        ...(headers || {}),
+      },
       cache: 'no-store',
     });
 
@@ -164,7 +180,7 @@ export async function createDepartment(input: CreateDepartmentInput): Promise<Ap
       headers,
       body: JSON.stringify({
         nom_departement: input.nom_departement.trim(),
-        chef_departementId: input.chef_departementId,
+        // chef_departementId: input.chef_departementId,
         description: input.description?.trim() || '',
       }),
     });
@@ -186,7 +202,7 @@ export async function createDepartment(input: CreateDepartmentInput): Promise<Ap
   }
 }
 
-export async function updateDepartment(departmentId: number, input: UpdateDepartmentInput): Promise<ApiResponse<Department>> {
+export async function updateDepartment(departmentId: number,  input: UpdateDepartmentInput): Promise<ApiResponse<Department>> {
   try {
     if (!departmentId) {
       return {
@@ -199,11 +215,11 @@ export async function updateDepartment(departmentId: number, input: UpdateDepart
     const headers = await getHeaders();
     
     const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/departments/${departmentId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers,
       body: JSON.stringify({
         nom_departement: input.nom_departement?.trim(),
-        chef_departementId: input.chef_departementId,
+        chef_DepartementId: input.chef_departementId,
         description: input.description?.trim(),
       }),
     });
@@ -253,33 +269,56 @@ export async function deleteDepartment(departmentId: number): Promise<ApiRespons
   }
 }
 
-export async function assignDepartmentHead(departmentId: number, userId: number): Promise<ApiResponse<Department>> {
+export async function assignDepartmentHead(departmentId: number, chef_DepartementId: number): Promise<ApiResponse<Department>> {
   try {
-    if (!departmentId || !userId) {
-      return {
-        success: false,
-        message: 'Department ID and User ID are required',
-        error: 'Validation failed',
-      };
-    }
-
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/departments/${departmentId}/assign-head`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ 
-        userId: Number(userId)
-      }),
-    });
+    const response = await fetch(
+      `${API_URL}/departements/${departmentId}/chef`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${await getAuthToken()}`,
+        },
+        body: JSON.stringify({ chef_DepartementId }),
+      }
+    );
+    // if (!departmentId || !chef_DepartementId) {
+    //   return {
+    //     success: false,
+    //     message: 'Department ID and User ID are required',
+    //     error: 'Validation failed',
+    //   };
+    // }
 
-    const result = await handleResponse(response);
+    // const headers = await getHeaders();
     
-    if (result.success && result.data) {
-      result.data = normalizeDepartment(result.data);
-    }
+    // const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/departments/${departmentId}/assign-head`, {
+    //   method: 'PATCH',
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //     Authorization: `Bearer ${await getAuthToken()}`,
+    //   },
+    //   body: JSON.stringify({ userId }),
+    // });
+    // const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
+    //   await fetch(`${API_URL}/departements/${departmentId}`, {  // vérifie aussi le nom de la route
+    //   method: 'PATCH',  // ← pas PUT
+    //   headers: {
+    //     'Content-Type': 'application/json',
+    //     Authorization: `Bearer ${await getAuthToken()}`,
+    //   },
+    //  body: JSON.stringify({ chef_DepartementId: chef_DepartementId }),
+    // });
+
+    // const result = await handleResponse(Response);
     
-    return result;
+    // if (result.success && result.data) {
+    //   result.data = normalizeDepartment(result.data);
+    // }
+    
+    return await handleResponse(response);
   } catch (error) {
     console.error(`Error assigning head to department ${departmentId}:`, error);
     return {

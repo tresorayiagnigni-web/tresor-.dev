@@ -80,7 +80,7 @@ const AdminControlCenterPage = () => {
     nom: '',
     email: '',
     password: '',
-    role: 'EMPLOYER',
+    role: 'EMPLOYEE',
     departement: '',
     telephone: '',
     status: 'true',
@@ -90,7 +90,7 @@ const AdminControlCenterPage = () => {
     nom: '',
     email: '',
     password: '',
-    role: 'EMPLOYER',
+    role: 'EMPLOYEE',
     departement: '',
     telephone: '',
     status: 'true',
@@ -109,19 +109,53 @@ const AdminControlCenterPage = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadData = async () => {
+      setIsLoading(true);
+      const result = await fetchAllData();
+      if (cancelled) return;
+
+      setUsers(result.users);
+      setTasks(result.tasks);
+      setDepartments(result.departments);
+      if (result.error) setError(result.error);
+      setIsLoading(false);
+    };  
     loadData();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ========== DERIVED STATE ==========
   const filteredUsers = users.filter((user) => {
+    const deptName =
+      typeof user.departement === 'string'
+      ? user.departement
+      : (user.departement as any)?.nom_departement || '';
+
     const matchesSearch =
       (user.nom || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.departement || '').toLowerCase().includes(searchQuery.toLowerCase());
+      deptName.toLowerCase().includes(searchQuery.toLowerCase());
+      // const matchesSearch =
+      //   (user.nom || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      //   (user.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      //   (user.departement || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesRole = selectedRole === 'all' || user.role === selectedRole;
     const userStatus = user.status === 'true' ? 'true' : user.status === 'false' ? 'false' : 'true';
-    const matchesStatus = selectedStatus === 'all';
-    return matchesSearch && matchesRole && matchesStatus;
+    // const matchesStatus = selectedStatus === 'all';
+    const userStatusStr =
+      user.status === true || user.status === 'true'
+      ? 'true'
+      : user.status === false || user.status === 'false'
+      ? 'false'
+      : 'true';
+
+    const matchesStatus =
+      selectedStatus === 'all' || userStatusStr === selectedStatus;
+      return matchesSearch && matchesRole && matchesStatus;
   });
 
   // Stats calculations
@@ -136,7 +170,7 @@ const AdminControlCenterPage = () => {
 
   const adminCount = users.filter((u) => u.role === 'ADMIN').length;
   const hodCount = users.filter((u) => u.role === 'HOD').length;
-  const employeeCount = users.filter((u) => u.role === 'EMPLOYER').length;
+  const employeeCount = users.filter((u) => u.role === 'EMPLOYEE').length;
 
   const departmentStats = departments.map((dept) => ({
     name: dept.nom_departement || 'Unnamed',
@@ -159,14 +193,14 @@ const AdminControlCenterPage = () => {
         icon: <UserCog size={14} className="mr-1" />,
         label: 'HOD',
       },
-      EMPLOYER: {
+      EMPLOYEE: {
         bg: 'bg-gray-100',
         text: 'text-gray-800',
         icon: <User size={14} className="mr-1" />,
         label: 'Employee',
       },
     };
-    return config[role] || config.EMPLOYER;
+    return config[role] || config.EMPLOYEE;
   };
 
  const getStatusBadge = (status: UserStatus) => {
@@ -193,7 +227,7 @@ const AdminControlCenterPage = () => {
       nom: '',
       email: '',
       password: '',
-      role: 'EMPLOYER',
+      role: 'EMPLOYEE',
       departement: '',
       telephone: '',
       status: 'true',
@@ -204,7 +238,7 @@ const AdminControlCenterPage = () => {
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
   };
-
+  
   const openEditModal = (user: ApiUser) => {
     setSelectedUser(user);
     let userStatus = typeof user.status === 'boolean' ? user.status : user.status ?? 'true';
@@ -212,9 +246,9 @@ const AdminControlCenterPage = () => {
       nom: user.nom || '',
       email: user.email || '',
       password: '',
-      role: user.role || 'EMPLOYER',
-      departement: user.departement || '',
-      telephone: user.telephone || '',
+      role: user.role || 'EMPLOYEE',
+      departement: typeof user.departement === 'string' ? user.departement : (user.departement as any)?.nom_departement || '',
+       telephone: user.telephone || '',
       status: userStatus,
     });
     setIsEditModalOpen(true);
@@ -261,7 +295,7 @@ const AdminControlCenterPage = () => {
 
     const result = await updateExistingUser(selectedUser.id!, editFormData);
     if (result.success && result.data) {
-      setUsers(users.map((user) => (user.id === selectedUser.id ? result.data : user)));
+      setUsers(users.map((user) => (user.id === selectedUser.id ? result.data! : user)));
       showSuccess(setSuccessMessage, `User ${result.data.nom} updated successfully!`);
       closeEditModal();
       loadData();
@@ -291,7 +325,7 @@ const AdminControlCenterPage = () => {
   const handleToggleStatus = async (userId: number, currentStatus: UserStatus) => {
     const result = await toggleUserStatus(userId, currentStatus);
     if (result.success && result.data) {
-      setUsers(users.map((user) => (user.id === selectedUser.id ? result.data : user)));
+      setUsers(users.map((user) => (user.id === userId ? result.data !: user)));
       const newStatus = currentStatus === 'true' ? 'false' : 'true';
       showSuccess(setSuccessMessage, `User ${newStatus === 'true' ? 'activated' : 'suspended'} successfully!`);
     } else {
@@ -467,7 +501,7 @@ const AdminControlCenterPage = () => {
                     <option value="all">All Roles</option>
                     <option value="ADMIN">Admin</option>
                     <option value="HOD">HOD</option>
-                    <option value="EMPLOYER">Employee</option>
+                    <option value="EMPLOYEE">Employee</option>
                   </select>
                   {/* Status Filter */}
                   <select
@@ -517,7 +551,7 @@ const AdminControlCenterPage = () => {
                   ) : (
                     filteredUsers.map((user) => {
                       const userStatus = user.status === 'true' ? 'true' : user.status === 'false' ? 'false' : 'true';
-                      const roleConfig = getRoleBadge(user.role || 'EMPLOYER');
+                      const roleConfig = getRoleBadge(user.role || 'EMPLOYEE');
                       const statusConfig = getStatusBadge(userStatus);
                       return (
                         <tr key={user.id} className="hover:bg-gray-50/50 transition duration-150">
@@ -544,7 +578,12 @@ const AdminControlCenterPage = () => {
                           <td className="py-3.5 px-6">
                             <div className="flex items-center gap-1.5">
                               <Building size={14} className="text-[#6B7280]" />
-                              <span className="text-[#1F2937]">{user.departement || 'Unassigned'}</span>
+                              {/* <span className="text-[#1F2937]">{user.departement || 'Unassigned'}</span> */}
+                              <span className="text-[#1F2937]">
+                                { user.departement === 'string'
+                                ? user.departement
+                                : user.departement?.nom_departement ?? 'Unassigned'}
+                                </span>
                             </div>
                           </td>
                           <td className="py-3.5 px-6">
@@ -780,9 +819,9 @@ const AdminControlCenterPage = () => {
                     required
                     disabled={isSubmitting}
                   >
-                    <option value="EMPLOYER">Employee</option>
-                    <option value="HOD">Head of Department</option>
-                    <option value="ADMIN">Administrator</option>
+                    <option value="EMPLOYEE">Employee</option>
+                    {/* <option value="HOD">Head of Department</option>
+                    <option value="ADMIN">Administrator</option> */}
                   </select>
                 </div>
 
@@ -798,13 +837,28 @@ const AdminControlCenterPage = () => {
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     disabled={isSubmitting}
                   >
+                    <option value="">Choisir un département</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={String(dept.id)}>
+                        {dept.nom_departement}
+                      </option>
+                    ))}
+                  </select>
+                  {/* <select
+                    id="departement"
+                    name="departement"
+                    value={formData.departement}
+                    onChange={handleFormChange}
+                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
+                  >
                     <option value="">Unassigned</option>
                     {departments.map(dept => (
                       <option key={dept.id} value={dept.nom_departement}>
                         {dept.nom_departement}
                       </option>
                     ))}
-                  </select>
+                  </select> */}
                 </div>
               </div>
 
@@ -943,7 +997,7 @@ const AdminControlCenterPage = () => {
                     required
                     disabled={isSubmitting}
                   >
-                    <option value="EMPLOYER">Employee</option>
+                    <option value="EMPLOYEE">Employee</option>
                     <option value="HOD">Head of Department</option>
                     <option value="ADMIN">Administrator</option>
                   </select>
@@ -978,7 +1032,7 @@ const AdminControlCenterPage = () => {
                     id="edit-status"
                     name="status"
                     value={
-                      editFormData.status === true ? 'true' : 
+                      editFormData.status=== true ? 'true' : 
                       editFormData.status === false ? 'false' : 
                       'true'
                     }
