@@ -94,9 +94,28 @@ export class DepartmentService {
   }
   
   async findAll() {
-    return this.departmentRepository.find({
+    const department = this.departmentRepository.find({
       relations: { chef_departement: true },
     });
+
+    const result = await Promise.all(
+    (await department).map(async (departement) => {
+      const nombre_de_membre = await this.usersRepository.count({
+        where: {
+          departement: {
+            id: departement.id,
+          },
+        },
+      });
+
+      return {
+        ...departement,
+        nombre_de_membre,
+      };
+    }),
+  );
+
+  return result;
   }
     
 
@@ -105,10 +124,24 @@ export class DepartmentService {
       where: { id },
       relations: { chef_departement: true },
     });
+
     if (!department) {
       throw new NotFoundException('Département non trouvé');
     }
-    return department;
+    
+    
+      const nombre_de_membre = await this.usersRepository.count({
+        where: {
+          departement: {
+            id: department.id,
+          },
+        },
+      });
+
+      return {
+        ...department,
+        nombre_de_membre,
+      };
   }
 
   async update(id: number, updateDepartmentDto: UpdateDepartmentDto) {
@@ -121,14 +154,43 @@ export class DepartmentService {
     throw new NotFoundException('Département introuvable');
   }
 
+  // Modifier le nom
+  if (updateDepartmentDto.nom_departement !== undefined) {
+    department.nom_departement =
+    updateDepartmentDto.nom_departement.trim();
+  }
+
+  // Modifier la description
+  if (updateDepartmentDto.description !== undefined) {
+    department.description =
+      updateDepartmentDto.description.trim();
+  }
+
   // Si on change le chef
   if (updateDepartmentDto.chef_DepartementId) {
     const nouveauChef = await this.usersRepository.findOne({
       where: { id: updateDepartmentDto.chef_DepartementId },
+      relations: {departement: true}
     });
 
     if (!nouveauChef) {
       throw new NotFoundException('Employé introuvable');
+    }
+
+    console.log('ID département:', department.id);
+
+console.log('HOD:', {
+  id: nouveauChef.id,
+  nom: nouveauChef.nom,
+  departement: nouveauChef.departement,
+  departementId: nouveauChef.departement?.id,
+});
+
+     // Vérifier que le nouvel HOD appartient au département
+    if (nouveauChef.departement?.id !== department.id) {
+      throw new BadRequestException(
+        'Cet EMPLOYEE doit appartenir à ce département',
+      );
     }
 
     // Rétrograder l'ancien chef
@@ -141,7 +203,13 @@ export class DepartmentService {
     department.chef_departement = nouveauChef;
     nouveauChef.role = Role.HOD;
     await this.usersRepository.save(nouveauChef);
+     // Mettre à jour la relation
+    department.chef_departement = nouveauChef;
   }
+
+  // Sauvegarder le département
+  const updatedDepartment =
+    await this.departmentRepository.save(department);
 
   // Autres champs (nom, description…)
   if (updateDepartmentDto.nom_departement) {
@@ -227,10 +295,41 @@ export class DepartmentService {
   };
 }
 
-   async removeChef(nom_departement: string) {
+//   async removeChef(nom_departement: string) {
+//   const departement = await this.departmentRepository.findOne({
+//     where: { nom_departement: nom_departement },
+//     relations: {chef_departement: true},
+//   });
+
+//   if (!departement) {
+//     throw new NotFoundException('Département introuvable');
+//   }
+
+//   if (!departement.chef_departement) {
+//     throw new BadRequestException('Ce département n\'a pas de chef');
+//   }
+
+//   const chef = departement.chef_departement;
+
+//   // Retirer le lien
+//   departement.chef_departement = null;
+//   await this.departmentRepository.save(departement);
+
+//   // Remettre le rôle à EMPLOYEE
+//   chef.role = Role.EMPLOYEE;
+//   await this.usersRepository.save(chef);
+
+//   return {
+//     message: `${chef.nom} n'est plus chef de département`,
+//   };
+// }
+
+async removeChef(id: number) {
   const departement = await this.departmentRepository.findOne({
-    where: { nom_departement: nom_departement },
-    relations: {chef_departement: true},
+    where: { id },
+    relations: {
+      chef_departement: true,
+    },
   });
 
   if (!departement) {
@@ -238,16 +337,18 @@ export class DepartmentService {
   }
 
   if (!departement.chef_departement) {
-    throw new BadRequestException('Ce département n\'a pas de chef');
+    throw new BadRequestException(
+      "Ce département n'a pas de chef",
+    );
   }
 
   const chef = departement.chef_departement;
 
-  // Retirer le lien
+  // Retirer le chef du département
   departement.chef_departement = null;
   await this.departmentRepository.save(departement);
 
-  // Remettre le rôle à EMPLOYEE
+  // Remettre son rôle à EMPLOYEE
   chef.role = Role.EMPLOYEE;
   await this.usersRepository.save(chef);
 
@@ -255,6 +356,5 @@ export class DepartmentService {
     message: `${chef.nom} n'est plus chef de département`,
   };
 }
-
 
 }

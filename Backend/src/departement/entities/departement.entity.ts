@@ -9,7 +9,7 @@ export class Departments extends BaseEntity{
     @Column({ unique: true })
     nom_departement?: string;
 
-    @OneToOne(() => User,{ nullable: true, onDelete: 'SET NULL' })
+    @OneToOne(() => User,{ nullable: true, })
     @JoinColumn({ name: 'chefDepartementId' })
     chef_departement?: User |  null;
 

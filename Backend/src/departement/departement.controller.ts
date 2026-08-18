@@ -37,9 +37,9 @@ export class DepartmentController {
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles( Role.ADMIN)
-  async findOne(@Param('id', ParseIntPipe) id: number) {
+  async findOne(
+    @Param('id', ParseIntPipe) id: number) {
 
-    console.log('Incoming request to findOne');
     return this.departmentService.findOne(id);
   }
 
@@ -53,20 +53,29 @@ export class DepartmentController {
   return this.departmentService.update(id, updateDepartmentDto);
 }
 
-  @Patch(':id/chef')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles( Role.ADMIN)
-  async assignchefDepartement(
-  @Param('id', ParseIntPipe) departementId: number,
-  @Body('chef_DepartementId', ParseIntPipe) chef_DepartementId: number,
-) {
-  return this.departmentService.assignChef(departementId, chef_DepartementId);
-}
+//   @Patch(':id/chef')
+//   @UseGuards(JwtAuthGuard, RolesGuard)
+//   @Roles( Role.ADMIN)
+//   async assignchefDepartement(
+//   @Param('id', ParseIntPipe) departementId: number,
+//   @Body('chef_DepartementId', ParseIntPipe) chef_DepartementId: number,
+// ) {
+//   return this.departmentService.assignChef(departementId, chef_DepartementId);
+// }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.departmentService.remove(id);
+  }
+
+  @Delete(':id/chef')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async removeChef(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.departmentService.removeChef(id);
   }
 }

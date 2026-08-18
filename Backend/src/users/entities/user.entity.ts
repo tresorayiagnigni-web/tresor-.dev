@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn, OneToMany,ManyToOne, JoinColumn, UpdateDateColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn, OneToMany,ManyToOne, JoinColumn, UpdateDateColumn, CreateDateColumn, OneToOne } from 'typeorm';
 import { Role } from '../../auth/enums/role.enum';
 import { Task } from '../../tasks/entities/task.entity';
 import { Departments } from '../../departement/entities/departement.entity';
@@ -24,15 +24,18 @@ export class User extends BaseEntity {
   @JoinColumn({ name: 'departementId' })
   departement?: Departments;
 
+  @Column({ nullable: true })
+  departementId?: number;
+
+  @OneToOne(() => Departments, (departement) => departement.chef_departement)
+  chef_departement?: Departments;
+
   @Column()
   telephone?: string;
 
 
   @Column({ default: true })
   status?: boolean;
-
-  // @UpdateDateColumn({ type: 'timestamp', default: () => 'CURRENT_TIME'})
-  // updateAt?: Date;
 
   @Column({
     type: 'enum',
@@ -43,16 +46,4 @@ export class User extends BaseEntity {
 
   @OneToMany(() => Task, (task) => task.user)
   tasks?: Task[];
-
-  // @OneToMany(() => Token, (token) => token.user)
-  // tokens?: Token[];
-
-  // // Dans User entity
-  // @Column({ default: true })
-  // isActive?: boolean;
-
-  // Ou avec @DeleteDateColumn() de TypeORM
-  // @DeleteDateColumn()
-  // deletedAt?: Date;
-
 }

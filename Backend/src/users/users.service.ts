@@ -163,12 +163,20 @@ export class UsersService {
   }
 
   async findAll() {
-    return await this.userRepository.find({
+    const users = await this.userRepository.find({
       relations: { departement: true },
     });
-  
 
-  
+    return users.map((user) => ({
+      id: user.id,
+      nom: user.nom,
+      email: user.email,
+      role: user.role,
+      telephone: user.telephone,
+      status: user.status,
+      departementId: user.departementId,
+      departement: user.departement,
+    }));
   }
 
   //Lire un utilisateur par son ID
