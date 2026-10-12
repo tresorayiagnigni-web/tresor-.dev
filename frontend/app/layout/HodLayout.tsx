@@ -63,12 +63,20 @@ export const HODLayout: React.FC<HODLayoutProps> = ({
     <div className="min-h-screen bg-[#FEFEFC] font-sans antialiased flex relative">
       {/* ===== DESKTOP SIDEBAR ===== */}
       <aside className="hidden md:flex md:flex-col md:w-[240px] flex-shrink-0 bg-[#263A81] text-white h-screen fixed top-0 left-0 overflow-y-auto z-30">
-        <div className="p-6 border-b border-white/10">
-          <div className="text-2xl font-bold tracking-tight">MENDO HR</div>
-          <div className="text-xs font-light opacity-70 mt-1">
-            Head of Department
-          </div>
-        </div>
+         <div className="flex items-center gap-3 mb-8">
+                  {/* Logo */}
+                  <div className="flex w-14 h-14 shrink-0 items-center justify-center bg-white rounded-lg">
+                    <img src="/logo.png" alt="logo" width={56} height={56} className="block h-full w-full object-contain" />
+                  </div>
+
+                  {/* HOD Info */}
+                  <div className="min-w-0">
+                    <div className="text-2xl font-bold tracking-tight leading-tight">MENDO<br />company</div>
+                    <div className="text-xs font-light opacity-70 mt-2">
+                      Head of Department
+                    </div>
+                  </div>
+                </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2">
           <Link href="/hod/dashboard" className={getNavItemClasses('/hod/dashboard')}>
@@ -116,7 +124,7 @@ export const HODLayout: React.FC<HODLayoutProps> = ({
             <div className="flex items-center gap-2">
               <Briefcase size={24} className="text-[#263A81] md:hidden" />
               <span className="text-xl font-bold text-[#263A81] hidden md:inline">
-                MENDO HR
+                MENDO <br />company
               </span>
             </div>
           </div>
@@ -162,10 +170,14 @@ export const HODLayout: React.FC<HODLayoutProps> = ({
             />
             <div className="absolute left-0 top-0 h-full w-[280px] bg-[#263A81] text-white p-6 shadow-xl animate-slide-in">
               <div className="flex justify-between items-center mb-8">
-                <div>
-                  <div className="text-2xl font-bold tracking-tight">MENDO HR</div>
-                  <div className="text-xs font-light opacity-70 mt-1">
-                    Head of Department
+
+                <div className="flex items-center gap-3 mb-8">
+                
+                  <div className="min-w-0">
+                    <div className="text-2xl font-bold tracking-tight leading-tight">MENDO<br />company</div>
+                    <div className="text-xs font-light opacity-70 mt-2">
+                      Head of Department
+                    </div>
                   </div>
                 </div>
                 <button

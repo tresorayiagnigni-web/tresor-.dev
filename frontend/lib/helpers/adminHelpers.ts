@@ -55,7 +55,7 @@ export const createNewUser = async (formData: any) => {
       email: formData.email,
       password: formData.password,
       role: formData.role,
-      departement: formData.departement,
+      departementId: formData.departementId,
       telephone: formData.telephone,
     });
     return result;
@@ -71,7 +71,7 @@ export const updateExistingUser = async (userId: number, editFormData: any) => {
       nom: editFormData.nom,
       email: editFormData.email,
       role: editFormData.role,
-      departement: editFormData.departement,
+      departementId: Number(editFormData.departementId) || null,
       telephone: editFormData.telephone,
     };
 
@@ -142,16 +142,48 @@ export const createNewDepartment = async (data: { nom_departement: string; descr
   }
 };
 
-export const updateExistingDepartment = async (id: number, data: { nom_departement: string; description?: string, chef_DepartementId?: number }) => {
+// export const updateExistingDepartment = async (id: number, data: { nom_departement: string; description?: string, chef_DepartementId?: number }) => {
+//   try {
+//     const result = await updateDepartment(id, {
+//       nom_departement: data.nom_departement,
+//       description: data.description || '',
+//     });
+//     return result;
+//   } catch (error) {
+//     console.error('Error updating department:', error);
+//     return { success: false, message: 'Failed to update department' };
+//   }
+// };
+
+export const updateExistingDepartment = async (
+  id: number,
+  data: {
+    nom_departement: string;
+    description?: string;
+    chef_DepartementId?: number;
+  }
+) => {
   try {
+    console.log('🚀 updateExistingDepartment');
+    console.log('ID:', id);
+    console.log('DATA:', data);
+
     const result = await updateDepartment(id, {
       nom_departement: data.nom_departement,
       description: data.description || '',
+      chef_DepartementId: data.chef_DepartementId,
     });
+
+    console.log('📥 Résultat updateDepartment:', result);
+
     return result;
   } catch (error) {
-    console.error('Error updating department:', error);
-    return { success: false, message: 'Failed to update department' };
+    console.error('❌ Error updating department:', error);
+
+    return {
+      success: false,
+      message: 'Failed to update department',
+    };
   }
 };
 
@@ -204,13 +236,13 @@ export const getRoleBadge = (role: UserRole) => {
       text: 'text-purple-800',
       label: 'HOD',
     },
-    EMPLOYER: {
+    EMPLOYEE: {
       bg: 'bg-gray-100',
       text: 'text-gray-800',
       label: 'Employee',
     },
   };
-  return config[role] || config.EMPLOYER;
+  return config[role] || config.EMPLOYEE;
 };
 
 export const getStatusBadge = (status: UserStatus) => {

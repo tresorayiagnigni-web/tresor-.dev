@@ -1,5 +1,6 @@
 import { IsOptional, IsString, IsEmail, IsEnum, IsNumber, IsBoolean } from 'class-validator';
-import { Role } from '../../auth/enums/role.enum'; // adapte le chemin
+import { Role } from '../../auth/enums/role.enum';
+import { Type } from 'class-transformer'; 
 
 export class UpdateUserDto {
   @IsOptional()
@@ -20,11 +21,11 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsBoolean()
-  status?: boolean; // si tu as un champ status
+  status?: boolean; 
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   departementId?: number;
 
-  // Ajoute ici tous les autres champs que tu veux pouvoir modifier
 }

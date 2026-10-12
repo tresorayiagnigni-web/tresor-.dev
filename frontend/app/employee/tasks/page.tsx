@@ -62,6 +62,9 @@ const EmployeeTasksPage: React.FC = () => {
 
       // Fetch tasks assigned to this employee
       const taskResult = await getTasks();
+
+      console.log('Résultat getTasks :', taskResult);
+
       if (taskResult.success && taskResult.data) {
         const userTasks = taskResult.data.filter(t => t.userId === employeeId);
         setTasks(userTasks);
@@ -92,7 +95,7 @@ const EmployeeTasksPage: React.FC = () => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter(task =>
-        (task.titre || '').toLowerCase().includes(query) ||
+        (task.title || '').toLowerCase().includes(query) ||
         (task.description || '').toLowerCase().includes(query)
       );
     }
@@ -389,7 +392,7 @@ const EmployeeTasksPage: React.FC = () => {
                       onClick={() => toggleTaskStatus(task.id!, task.status || 'A_faire')}
                       className="mt-1 flex-shrink-0 hover:scale-110 transition-transform"
                       disabled={isSubmitting}
-                      aria-label={`Mark "${task.titre}" as ${
+                      aria-label={`Mark "${task.title}" as ${
                         isCompleted ? 'pending' : 'completed'
                       }`}
                     >
@@ -407,7 +410,7 @@ const EmployeeTasksPage: React.FC = () => {
                                 : 'text-[#1F2937]'
                             }`}
                           >
-                            {task.titre}
+                            {task.title}
                           </h3>
                           <p
                             className={`text-sm mt-1 ${

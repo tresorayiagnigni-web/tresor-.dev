@@ -45,7 +45,7 @@ interface CreateUserFormData {
   email: string;
   telephone: string;
   role: UserRole;
-  departement: string;
+  departementId: number | '';
   password: string;
 }
 
@@ -54,7 +54,7 @@ interface EditUserFormData {
   email: string;
   telephone: string;
   role: UserRole;
-  departement: string;
+  departementId: number | '';
   status: UserStatus;
 }
 
@@ -82,7 +82,7 @@ const UsersPage: React.FC = () => {
     email: '',
     telephone: '',
     role: 'EMPLOYEE',
-    departement: '',
+    departementId: '',
     password: '',
   });
 
@@ -91,7 +91,7 @@ const UsersPage: React.FC = () => {
     email: '',
     telephone: '',
     role: 'EMPLOYEE',
-    departement: '',
+    departementId: '',
     status: 'true',
   });
 
@@ -191,7 +191,7 @@ const UsersPage: React.FC = () => {
       email: '',
       telephone: '',
       role: 'EMPLOYEE',
-      departement: '',
+      departementId: '',
       password: '',
     });
     setIsCreateModalOpen(true);
@@ -216,9 +216,9 @@ const UsersPage: React.FC = () => {
       email: formData.email,
       password: formData.password,
       role: formData.role,
-      departement: formData.departement,
+      departementId: formData.departementId,
       telephone: formData.telephone,
-      status: 'true',
+      status: 'true'
     });
 
     if (result.success && result.data) {
@@ -239,7 +239,7 @@ const UsersPage: React.FC = () => {
       email: user.email || '',
       telephone: user.telephone || '',
       role: user.role || 'EMPLOYEE',
-      departement: user.departement || '',
+      departementId: user.departementId || '',
       status: user.status === 'true' || user.status === true ? 'true' : 'false',
     });
     setIsEditModalOpen(true);
@@ -265,7 +265,7 @@ const UsersPage: React.FC = () => {
       nom: editFormData.nom,
       email: editFormData.email,
       role: editFormData.role,
-      departement: editFormData.departement,
+      departementId: editFormData.departementId,
       telephone: editFormData.telephone,
       status: editFormData.status,
     });
@@ -744,7 +744,7 @@ const UsersPage: React.FC = () => {
                   <select
                     id="departement"
                     name="departement"
-                    value={formData.departement}
+                    value={formData.departementId}
                     onChange={handleFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     disabled={isSubmitting}
@@ -879,16 +879,16 @@ const UsersPage: React.FC = () => {
                     Department
                   </label>
                   <select
-                    id="edit-departement"
-                    name="departement"
-                    value={editFormData.departement}
+                    id="edit-departementId"
+                    name="departementId"
+                    value={editFormData.departementId}
                     onChange={handleEditFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     disabled={isSubmitting}
                   >
                     <option value="">Unassigned</option>
                     {departments.map(dept => (
-                      <option key={dept.id} value={dept.nom_departement}>
+                      <option key={dept.id} value={dept.chef_DepartementId}>
                         {dept.nom_departement}
                       </option>
                     ))}

@@ -41,7 +41,7 @@ import {
 interface DepartmentFormData {
   nom_departement: string;
   description: string;
-  chef_DepartementId: string;
+  chef_DepartementId: number | '';
 }
 
 // ========== MAIN COMPONENT ==========
@@ -140,7 +140,7 @@ const DepartmentsPage: React.FC = () => {
   const availableUsers = users.filter(
   (user) =>
     user.role === "EMPLOYEE" &&
-    Number(user.departementId) === Number(selectedDepartment)
+    Number(user.departementId) === Number(selectedDepartment?.id)
 );
 
   // ========== HELPER FUNCTIONS ==========
@@ -170,7 +170,7 @@ const DepartmentsPage: React.FC = () => {
   };
 
   const getEmployeeCount = (department: Department) => {
-    return users.filter((u) => u.departmentId === department.id).length;
+    return users.filter((u) => u.departementId === department.id).length;
   };
 
   // ========== MODAL HANDLERS ==========
@@ -192,7 +192,7 @@ const DepartmentsPage: React.FC = () => {
     setEditFormData({
       nom_departement: department.nom_departement || '',
       description: department.description || '',
-      chef_DepartementId: department.chef_DepartementId?.toString() || '',
+      chef_DepartementId: department.chef_DepartementId? department.chef_DepartementId : '',
     });
     setIsEditModalOpen(true);
   };
@@ -229,7 +229,7 @@ const DepartmentsPage: React.FC = () => {
 
     if (result.success && result.data) {
       if (formData.chef_DepartementId) {
-        const assignResult = await assignHOD(result.data.id!, parseInt(formData.chef_DepartementId));
+        const assignResult = await assignHOD(result.data.id!, Number(formData.chef_DepartementId));
         if (assignResult.success) {
           showSuccess(setSuccessMessage, `Department created with HOD assigned successfully!`);
         }
@@ -245,45 +245,131 @@ const DepartmentsPage: React.FC = () => {
   };
 
   const handleEditDepartment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDepartment) return;
-    setIsSubmitting(true);
-    setError(null);
+  e.preventDefault();
 
-    const result = await updateExistingDepartment(selectedDepartment.id!, {
-      nom_departement: editFormData.nom_departement,
-      description: editFormData.description,
-      chef_DepartementId: editFormData.chef_DepartementId ? parseInt(editFormData.chef_DepartementId) : undefined,
-    });
+  console.log('🔥 SUBMIT EDIT DEPARTMENT');
 
-    if (result.success && result.data) {
-      const currentHODId = selectedDepartment.chef_DepartementId;
-      const newHODId = editFormData.chef_DepartementId ? parseInt(editFormData.chef_DepartementId) : null;
+  if (!selectedDepartment?.id) {
+    console.error('❌ Aucun département sélectionné');
+    return;
+  }
 
-      if (newHODId !== currentHODId) {
-        if (newHODId) {
-          const assignResult = await assignHOD(selectedDepartment.id!, newHODId);
-          if (assignResult.success) {
-            showSuccess(setSuccessMessage, `Department updated with new HOD assigned!`);
-          }
-        }
-      } else {
-        showSuccess(setSuccessMessage, `Department ${result.data.nom_departement} updated successfully!`);
+  setIsSubmitting(true);
+  setError(null);
+
+  console.log('🔥 AVANT UPDATE');
+  console.log('ID département :', selectedDepartment.id);
+  console.log('Nom :', editFormData.nom_departement);
+  console.log('Description :', editFormData.description);
+  console.log('Chef sélectionné :', editFormData.chef_DepartementId);
+  console.log('Type chef :', typeof editFormData.chef_DepartementId);
+
+  try {
+    const result = await updateExistingDepartment(
+      selectedDepartment.id,
+      {
+        nom_departement: editFormData.nom_departement,
+        description: editFormData.description,
+        chef_DepartementId:
+          editFormData.chef_DepartementId === ''
+            ? undefined
+            : Number(editFormData.chef_DepartementId),
       }
-      closeEditModal();
-      loadData();
-    } else {
+    );
+
+    console.log('🔥 APRÈS UPDATE');
+    console.log('Résultat :', result);
+
+    if (!result.success) {
       setError(result.message || 'Failed to update department');
+      return;
     }
+
+    showSuccess(
+      setSuccessMessage,
+      `Department ${result.data?.nom_departement || ''} updated successfully!`
+    );
+
+    closeEditModal();
+
+    await loadData();
+
+  } catch (error) {
+    console.error('❌ ERREUR UPDATE DEPARTMENT:', error);
+
+    setError(
+      error instanceof Error
+        ? error.message
+        : 'Failed to update department'
+    );
+  } finally {
     setIsSubmitting(false);
-  };
+  }
+};
+
+//   const handleEditDepartment = async (e: React.FormEvent) => {
+//     e.preventDefault();
+
+//      console.log('🔥 SUBMIT EDIT DEPARTMENT');
+
+//     if (!selectedDepartment) return;
+//     setIsSubmitting(true);
+//     setError(null);
+
+//     console.log('🔥 AVANT UPDATE');
+//   console.log('selectedDepartment:', selectedDepartment);
+//   console.log('editFormData:', editFormData);
+
+
+//     console.log('========== UPDATE DEPARTMENT ==========');
+//     console.log('ID département :', selectedDepartment.id);
+//     console.log('Formulaire :', editFormData);
+//     console.log(
+//   'Chef sélectionné :',
+//   editFormData.chef_DepartementId
+// );
+// console.log(
+//   'Type chef :',
+//   typeof editFormData.chef_DepartementId
+// );
+
+//     const result = await updateExistingDepartment(selectedDepartment.id!, {
+//       nom_departement: editFormData.nom_departement,
+//       description: editFormData.description,
+//       chef_DepartementId: editFormData.chef_DepartementId === '' ? undefined :  Number(editFormData.chef_DepartementId),
+//     });
+
+//      console.log('🔥 APRÈS UPDATE');
+//   console.log('result:', result);
+
+//     if (result.success && result.data) {
+//       const currentHODId = selectedDepartment.chef_DepartementId;
+//       const newHODId = editFormData.chef_DepartementId ? parseInt(editFormData.chef_DepartementId) : null;
+
+//       if (newHODId !== currentHODId) {
+//         if (newHODId) {
+//           const assignResult = await assignHOD(selectedDepartment.id!, newHODId);
+//           if (assignResult.success) {
+//             showSuccess(setSuccessMessage, `Department updated with new HOD assigned!`);
+//           }
+//         }
+//       } else {
+//         showSuccess(setSuccessMessage, `Department ${result.data.nom_departement} updated successfully!`);
+//       }
+//       closeEditModal();
+//       loadData();
+//     } else {
+//       setError(result.message || 'Failed to update department');
+//     }
+//     setIsSubmitting(false);
+//   };
 
   const handleDeleteDepartment = async () => {
     if (!departmentToDelete) return;
     setIsSubmitting(true);
     setError(null);
 
-    const employeeCount = users.filter((u) => u.departmentId === departmentToDelete.id).length;
+    const employeeCount = users.filter((u) => u.departementId === departmentToDelete.id).length;
     if (employeeCount > 0) {
       setError(`Cannot delete department with ${employeeCount} assigned users. Please reassign or remove users first.`);
       setIsSubmitting(false);
@@ -465,7 +551,7 @@ const handleAssignChef = async (
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[#6B7280]">Employees</span>
+                        <span className="text-[#6B7280]">Members</span>
                         <span className="font-semibold text-[#1F2937]">{employeeCount}</span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -547,7 +633,7 @@ const handleAssignChef = async (
                 />
               </div>
 
-             <div>
+             {/* <div>
                 <label htmlFor="chef_departementId" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                   Head of Department
                 </label>
@@ -569,7 +655,7 @@ const handleAssignChef = async (
                 <p className="mt-1.5 text-xs text-[#6B7280]">
                   Only users with HOD role can be selected. Only unassigned HODs are shown.
                 </p>
-              </div>
+              </div> */}
 
               <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
                 <button

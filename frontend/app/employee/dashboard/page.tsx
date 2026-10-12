@@ -80,6 +80,9 @@ const EmployeeWorkspaceDashboardV2: React.FC = () => {
 
       // Fetch tasks assigned to this employee
       const taskResult = await getTasks();
+
+      console.log('Résultat getTasks :', taskResult);
+
       if (taskResult.success && taskResult.data) {
         const userTasks = taskResult.data.filter(t => t.userId === employeeId);
         setTasks(userTasks);
@@ -315,7 +318,7 @@ const EmployeeWorkspaceDashboardV2: React.FC = () => {
                   >
                     <div className="flex-1">
                       <div className={`font-medium ${isCompleted ? 'text-[#6B7280] line-through' : 'text-[#1F2937]'}`}>
-                        {task.titre}
+                        {task.title}
                       </div>
                       <div className="text-sm text-[#6B7280] flex items-center gap-2 flex-wrap">
                         <Calendar size={14} />

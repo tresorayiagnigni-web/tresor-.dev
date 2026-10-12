@@ -61,12 +61,16 @@ const HODDashboardPage: React.FC = () => {
     try {
       // Fetch all tasks
       const taskResult = await getTasks();
+
+      console.log('Résultat getTasks :', taskResult);
+
       if (taskResult.success && taskResult.data) {
         setTasks(taskResult.data);
       }
 
       // Fetch all users
       const userResult = await getUsers();
+     
       if (userResult.success && userResult.data) {
         setUsers(userResult.data);
       }
@@ -77,6 +81,20 @@ const HODDashboardPage: React.FC = () => {
       if (deptResult.success && deptResult.data) {
         setDepartment(deptResult.data);
       }
+
+      // ========== AJOUTE LES LOGS ICI ==========
+    console.log('=== DEBUG HOD ===');
+    console.log('department chargé:', deptResult.data);          // utilise le résultat direct
+    console.log('department.id:', deptResult.data?.id);
+    console.log('users:', userResult.data);
+    console.log('departementIds des users:', userResult.data?.map(u => ({ 
+      id: u.id, 
+      nom: u.nom, 
+      departementId: u.departementId 
+    })));
+    console.log('tasks:', taskResult.data);
+    // ========================================
+
     } catch (err) {
       setError('Failed to load dashboard data');
     }
@@ -90,12 +108,23 @@ const HODDashboardPage: React.FC = () => {
 
   // ===== DERIVED STATE =====
   // Get users in HOD's department
-  const departmentUsers = users.filter(u => u.departmentId === department?.id);
+  const departmentUsers = users.filter(user => {
+  const match = Number(user.departementId) === Number(department?.id);
+  // log pour voir
+  console.log(user.nom, user.departementId, '===', department?.id, '→', match);
+  return match;
+ });
   const totalEmployees = departmentUsers.length;
 
   // Get tasks assigned to users in HOD's department
-  const departmentUserIds = departmentUsers.map(u => u.id).filter((id): id is number => id !== undefined);
-  const departmentTasks = tasks.filter(t => t.userId && departmentUserIds.includes(t.userId));
+  const departmentUserIds = departmentUsers.map(user => user.id).filter((id): id is number => id !== undefined);
+
+  // Récupérer les tâches attribuées aux employés du département
+  const departmentTasks = tasks.filter(
+    task =>
+      task.userId !== undefined &&
+      departmentUserIds.includes(Number(task.userId))
+  );
 
   // Task statistics
   const pendingTasks = departmentTasks.filter(t => t.status !== 'Terminer').length;
@@ -128,7 +157,7 @@ const HODDashboardPage: React.FC = () => {
 
     return {
       id: task.id?.toString() || '',
-      title: task.titre || '',
+      title: task.title || '',
       assignedEmployee: assignedUser?.nom || 'Unassigned',
       dueDate: task.Date_limite || '',
       priority: priorityMap[task.priorite || 'Moyen'] || 'medium',

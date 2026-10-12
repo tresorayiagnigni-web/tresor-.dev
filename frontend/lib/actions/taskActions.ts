@@ -3,6 +3,7 @@
 'use server';
 
 import { cookies } from 'next/headers';
+import { User } from './userActions';
 
 // ========== TYPE DEFINITIONS ==========
 export type TaskStatus = 'A_faire' | 'En_cours' | 'Terminer';
@@ -56,73 +57,73 @@ export interface ApiResponse<T = any> {
   error?: string;
 }
 
-// ========== HELPER FUNCTIONS ==========
+// ========== HELPERS ==========
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+
 const getAuthToken = async (): Promise<string | null> => {
   const cookieStore = await cookies();
-  const token = cookieStore.get('my_secret_token')?.value;
-  return token || null;
+  return cookieStore.get('my_secret_token')?.value || null;
 };
 
 const getHeaders = async (): Promise<HeadersInit> => {
   const token = await getAuthToken();
   return {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 };
 
-const handleResponse = async (response: Response): Promise<ApiResponse> => {
+const handleResponse = async <T = any>(response: Response): Promise<ApiResponse<T>> => {
   try {
     const data = await response.json();
-    
+
     if (!response.ok) {
       return {
         success: false,
-        message: data?.message || 'An error occurred',
+        message: data?.message || 'Une erreur est survenue',
         error: data?.error || 'Request failed',
       };
     }
-    
+
     return {
       success: true,
-      data: data,
-      message: data?.message || 'Operation successful',
+      data: data?.data ?? data, // gère les deux formats de réponse backend
+      message: data?.message || 'Opération réussie',
     };
   } catch (error) {
     return {
       success: false,
-      message: 'Failed to parse server response',
+      message: 'Impossible de parser la réponse du serveur',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 };
 
-// ========== TASK CRUD OPERATIONS ==========
+// ========== TASK CRUD ==========
 
 export async function getTasks(filters?: FilterTaskDto): Promise<ApiResponse<Task[]>> {
   try {
     const headers = await getHeaders();
-    
+
     const queryParams = new URLSearchParams();
     if (filters?.status) queryParams.append('status', filters.status);
     if (filters?.priority) queryParams.append('priority', filters.priority);
     if (filters?.search) queryParams.append('search', filters.search);
-    
-    // const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const url = `http://localhost:3001/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    
+
+    const url = `${BACKEND_URL}/tasks${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+
     const response = await fetch(url, {
       method: 'GET',
       headers,
       cache: 'no-store',
     });
 
-    return await handleResponse(response);
+    return await handleResponse<Task[]>(response);
   } catch (error) {
     console.error('Error fetching tasks:', error);
     return {
       success: false,
-      message: 'Failed to fetch tasks',
+      message: 'Impossible de récupérer les tâches',
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
@@ -131,19 +132,19 @@ export async function getTasks(filters?: FilterTaskDto): Promise<ApiResponse<Tas
 export async function getTaskById(taskId: number): Promise<ApiResponse<Task>> {
   try {
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks/${taskId}`, {
+
+    const response = await fetch(`${BACKEND_URL}/tasks/${taskId}`, {
       method: 'GET',
       headers,
       cache: 'no-store',
     });
 
-    return await handleResponse(response);
+    return await handleResponse<Task>(response);
   } catch (error) {
     console.error(`Error fetching task ${taskId}:`, error);
     return {
       success: false,
-      message: 'Failed to fetch task',
+      message: 'Impossible de récupérer la tâche',
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
@@ -154,7 +155,7 @@ export async function createTask(input: CreateTaskInput): Promise<ApiResponse<Ta
     if (!input.title?.trim()) {
       return {
         success: false,
-        message: 'Task title is required',
+        message: 'Le titre de la tâche est obligatoire',
         error: 'Validation failed',
       };
     }
@@ -162,16 +163,16 @@ export async function createTask(input: CreateTaskInput): Promise<ApiResponse<Ta
     if (!input.userId) {
       return {
         success: false,
-        message: 'User ID is required',
+        message: "L'ID utilisateur est obligatoire",
         error: 'Validation failed',
       };
     }
 
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks`, {
+
+    const response = await fetch(`${BACKEND_URL}/tasks`, {
       method: 'POST',
-      headers: await getHeaders(),
+      headers,
       body: JSON.stringify({
         title: input.title.trim(),
         description: input.description?.trim() || '',
@@ -182,80 +183,63 @@ export async function createTask(input: CreateTaskInput): Promise<ApiResponse<Ta
       }),
     });
 
-    return await handleResponse(response);
+    return await handleResponse<Task>(response);
   } catch (error) {
     console.error('Error creating task:', error);
     return {
       success: false,
-      message: 'Failed to create task',
+      message: 'Impossible de créer la tâche',
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
 }
 
-export async function updateTask(taskId: number, input: UpdateTaskInput): Promise<ApiResponse<Task>> {
+export async function updateTask(
+  taskId: number,
+  input: UpdateTaskInput
+): Promise<ApiResponse<Task>> {
   try {
     if (!taskId) {
       return {
         success: false,
-        message: 'Task ID is required',
+        message: "L'ID de la tâche est obligatoire",
         error: 'Validation failed',
       };
     }
 
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks/${taskId}`, {
+
+    // On n'envoie que les champs définis
+    const body: Record<string, any> = {};
+    if (input.title !== undefined) body.title = input.title.trim();
+    if (input.description !== undefined) body.description = input.description?.trim();
+    if (input.status !== undefined) body.status = input.status;
+    if (input.priorite !== undefined) body.priorite = input.priorite;
+    if (input.userId !== undefined) body.userId = input.userId;
+    if (input.Date_limite !== undefined) body.Date_limite = input.Date_limite;
+
+    const response = await fetch(`${BACKEND_URL}/tasks/${taskId}`, {
       method: 'PUT',
       headers,
-      body: JSON.stringify({
-        title: input.title?.trim(),
-        description: input.description?.trim(),
-        status: input.status,
-        priorite: input.priorite,
-        userId: input.userId,
-        Date_limite: input.Date_limite,
-      }),
+      body: JSON.stringify(body),
     });
 
-    return await handleResponse(response);
+    return await handleResponse<Task>(response);
   } catch (error) {
     console.error(`Error updating task ${taskId}:`, error);
     return {
       success: false,
-      message: 'Failed to update task',
+      message: 'Impossible de mettre à jour la tâche',
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
 }
 
-export async function updateTaskStatus(taskId: number, status: TaskStatus): Promise<ApiResponse<Task>> {
-  try {
-    if (!taskId) {
-      return {
-        success: false,
-        message: 'Task ID is required',
-        error: 'Validation failed',
-      };
-    }
-
-    const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks/${taskId}`, {
-      method: 'PUT',
-      headers,
-      body: JSON.stringify({ status }),
-    });
-
-    return await handleResponse(response);
-  } catch (error) {
-    console.error(`Error updating task status ${taskId}:`, error);
-    return {
-      success: false,
-      message: 'Failed to update task status',
-      error: error instanceof Error ? error.message : 'Network error',
-    };
-  }
+export async function updateTaskStatus(
+  taskId: number,
+  status: TaskStatus
+): Promise<ApiResponse<Task>> {
+  return updateTask(taskId, { status });
 }
 
 export async function deleteTask(taskId: number): Promise<ApiResponse> {
@@ -263,14 +247,14 @@ export async function deleteTask(taskId: number): Promise<ApiResponse> {
     if (!taskId) {
       return {
         success: false,
-        message: 'Task ID is required',
+        message: "L'ID de la tâche est obligatoire",
         error: 'Validation failed',
       };
     }
 
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks/${taskId}`, {
+
+    const response = await fetch(`${BACKEND_URL}/tasks/${taskId}`, {
       method: 'DELETE',
       headers,
     });
@@ -280,7 +264,7 @@ export async function deleteTask(taskId: number): Promise<ApiResponse> {
     console.error(`Error deleting task ${taskId}:`, error);
     return {
       success: false,
-      message: 'Failed to delete task',
+      message: 'Impossible de supprimer la tâche',
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
@@ -289,28 +273,52 @@ export async function deleteTask(taskId: number): Promise<ApiResponse> {
 export async function getTasksByUser(userId: number): Promise<ApiResponse<Task[]>> {
   try {
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/tasks?userId=${userId}`, {
+
+    const response = await fetch(`${BACKEND_URL}/tasks?userId=${userId}`, {
       method: 'GET',
       headers,
       cache: 'no-store',
     });
 
-    return await handleResponse(response);
+    return await handleResponse<Task[]>(response);
   } catch (error) {
     console.error(`Error fetching tasks for user ${userId}:`, error);
     return {
       success: false,
-      message: 'Failed to fetch user tasks',
+      message: "Impossible de récupérer les tâches de l'utilisateur",
       error: error instanceof Error ? error.message : 'Network error',
     };
   }
 }
 
 export async function getTasksByStatus(status: TaskStatus): Promise<ApiResponse<Task[]>> {
-  return await getTasks({ status });
+  return getTasks({ status });
 }
 
 export async function assignTask(taskId: number, userId: number): Promise<ApiResponse<Task>> {
-  return await updateTask(taskId, { userId });
+  return updateTask(taskId, { userId });
+}
+
+export async function getDepartmentUsers(): Promise<ApiResponse<User[]>> {
+  try {
+    const headers = await getHeaders();
+
+    const response = await fetch(
+      `${BACKEND_URL}/users/my-department/employees`,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      }
+    );
+
+    return await handleResponse<User[]>(response);
+  } catch (error) {
+    console.error('Error loading department members:', error);
+    return {
+      success: false,
+      message: 'Impossible de charger les membres du département',
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
 }

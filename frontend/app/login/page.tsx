@@ -100,8 +100,15 @@ const LoginPageV2: React.FC = () => {
       {/* LEFT PANEL - Branding */}
       <div className="hidden md:flex md:w-1/2 bg-[#263A81] text-white flex-col justify-between p-12 lg:p-16">
         <div>
-          <div className="text-4xl font-bold tracking-tight">MENDO HR</div>
-          <div className="mt-2 text-sm font-light opacity-80">Human Resource Management</div>
+          <div className="flex items-center justify-start gap-3 mb-8-translate-x-12">
+            {/* Logo */}
+            <img src="/logo.png" alt="logo" className="w-20 h-20 object-contain shrink-0" />
+            
+            <div className="text-left">
+              <h1 className="text-3xl font-bold text-white leading-tight">MENDO <br />company</h1>
+              <p className="text-sm text-white mt-2">Business organization <br />and taks management </p>
+            </div>
+          </div>
         </div>
 
         <div className="max-w-md">
@@ -114,7 +121,7 @@ const LoginPageV2: React.FC = () => {
         </div>
 
         <div className="text-sm opacity-60 font-light">
-          © 2026 MENDO HR. All rights reserved.
+          © 2026 MENDO. All rights reserved.
         </div>
       </div>
 
@@ -123,11 +130,15 @@ const LoginPageV2: React.FC = () => {
         <div className="w-full max-w-md md:max-w-[400px]">
           {/* Mobile Branding */}
           <div className="md:hidden text-center mb-8">
-            <div className="text-3xl font-bold text-[#263A81]">MENDO HR</div>
-            <div className="text-sm text-[#6B7280] mt-1">Human Resource Management</div>
+            <div className="text-3xl font-bold text-[#263A81]">MENDO <br />company</div>
+            <p className="text-sm text-[#6B7280] mt-1">Business organization <br />and taks management </p>
           </div>
 
           <div className="mb-8">
+            <div className="flex items-center justify-start gap-3 mb-8-translate-x-2">
+              {/* Logo */}
+              <img src="/logo.png" alt="logo" className="w-24 h-24 object-contain mb-4" />
+            </div>
             <h2 className="text-2xl font-semibold text-[#1F2937]">Welcome Back</h2>
             <p className="text-[#6B7280] text-sm mt-1">Sign in to access your HR dashboard.</p>
           </div>

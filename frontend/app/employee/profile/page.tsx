@@ -103,7 +103,7 @@ const EmployeeProfilePage: React.FC = () => {
       setEmployeeId(userId);
 
       // Fetch user data
-      const userResult = await getUserById(userId);
+      const userResult = await getCurrentUser();
       if (userResult.success && userResult.data) {
         const userData = userResult.data;
         setUser(userData);
@@ -120,8 +120,8 @@ const EmployeeProfilePage: React.FC = () => {
         );
 
         // Fetch department if user has departmentId
-        if (userData.departmentId) {
-          const deptResult = await getDepartmentById(userData.departmentId);
+        if (userData.departementId) {
+          const deptResult = await getDepartmentById(userData.departementId);
           if (deptResult.success && deptResult.data) {
             setDepartment(deptResult.data);
           }
@@ -132,6 +132,9 @@ const EmployeeProfilePage: React.FC = () => {
 
       // Fetch tasks to get task count
       const taskResult = await getTasks();
+
+      console.log('Résultat getTasks :', taskResult);
+
       if (taskResult.success && taskResult.data) {
         const userTasks = taskResult.data.filter(t => t.userId === userId);
         setTasks(userTasks);

@@ -1,16 +1,12 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-import { AuthService } from '../auth.service';
-import { UsersService } from 'src/users/users.service';
-import { User } from 'src/users/entities/user.entity';
-import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-
+import { Repository } from 'typeorm';
+import { User } from 'src/users/entities/user.entity';
 
 export interface JwtPayload {
-  sub: number; // L'ID de l'utilisateur
+  sub: number;
   email: string;
 }
 
@@ -19,28 +15,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private configService: ConfigService,
-    private authService: AuthService,
-    private usersService: UsersService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET ||'JWT_SECRET',
+      secretOrKey: process.env.JWT_SECRET || 'JWT_SECRET',
     });
   }
 
   async validate(payload: JwtPayload) {
-    
-    console.log('Payload :', payload);
-    const userId = payload.sub;
+    console.log('===== JWT Payload =====', payload);
 
-    // 2. Recherche de l'utilisateur en BDD via l'ID extrait du token
     const user = await this.userRepository.findOne({
-      where: { id: userId },
+      where: { id: payload.sub },
+      relations: { departement: true }, // attention à l'orthographe
     });
 
-    console.log('User:',user );
+    console.log('===== User trouvé =====', user);
 
     if (!user) {
       throw new UnauthorizedException('Utilisateur inexistant');
@@ -50,21 +41,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Compte inactif');
     }
 
-    
-    return this.userRepository.findOne({
-      where: {
-        id: payload.sub,
-      },
-      relations: { departement: true, },
-    });
-  
-
-    // return user;
-
-    // return {
-    //   id: user.id,
-    //   email: user.email,
-    //   role: user.role,       // Important pour le RolesGuard
-    // };
+    // Ce que tu retournes ici devient req.user
+    return user;
   }
 }

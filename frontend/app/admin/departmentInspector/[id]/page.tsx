@@ -30,7 +30,8 @@ import { formatDate } from '@/lib/helpers/adminHelpers';
 interface Department {
   id?: number;
   nom_departement: string;
-  chef_departement?: string;
+  chef_departement?: ApiUser | null;
+  chef_DepartementId?: number | null;
   description?: string;
   cree_le?: string;
   isActive?: boolean;
@@ -57,12 +58,12 @@ const DepartmentInspectorPage: React.FC = () => {
 
     try {
       // Fetch department details
+      
       const deptResult = await getDepartmentById(parseInt(departmentId));
-      if (deptResult.success && deptResult.data) {
-        setDepartment(deptResult.data);
-      } else {
-        setError(deptResult.message || 'Failed to load department');
+      if (deptResult.success || !deptResult.data) {
+        throw new Error(deptResult.message || 'Failed to load department');
       }
+      setDepartment(deptResult.data as Department);
 
       // Fetch users
       const userResult = await getUsers();
@@ -72,6 +73,9 @@ const DepartmentInspectorPage: React.FC = () => {
 
       // Fetch tasks
       const taskResult = await getTasks();
+
+      console.log('Résultat getTasks :', taskResult);
+
       if (taskResult.success && taskResult.data) {
         setTasks(taskResult.data);
       }
@@ -90,12 +94,18 @@ const DepartmentInspectorPage: React.FC = () => {
 
   // ===== DERIVED STATE =====
   // Get HOD details
-  const hod = department?.chef_departement 
-    ? users.find(u => u.id === department.chef_departement) 
-    : null;
+  const hod = department?.chef_DepartementId 
+  ? users.find(u => u.id === department.chef_DepartementId) 
+  : null;
 
   // Get employees in this department
-  const employees = users.filter(u => u.departement?.id === department?.id);
+  const employees = users.filter(u => u.departementId === department?.id);
+  // const hod = department?.chef_Departement 
+  //   ? users.find(u => u.id === department.chef_Departement) 
+  //   : null;
+
+  // // Get employees in this department
+  // const employees = users.filter(u => u.departement?.id === department?.id);
 
   // Get tasks for users in this department
   const employeeIds = employees.map(e => e.id).filter((id): id is number => id !== undefined);
@@ -245,7 +255,7 @@ const DepartmentInspectorPage: React.FC = () => {
         <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-[#6B7280]">Total Employees</p>
+              <p className="text-sm font-medium text-[#6B7280]">Total Members</p>
               <p className="text-3xl font-bold text-[#1F2937] mt-1">{totalEmployees}</p>
             </div>
             <div className="p-3 bg-[#263A81]/10 rounded-lg">
@@ -265,7 +275,7 @@ const DepartmentInspectorPage: React.FC = () => {
             </div>
           </div>
           <div className="mt-2 text-xs text-[#6B7280]">
-            Across {totalEmployees} employees
+            Across {totalEmployees} members
           </div>
         </div>
 
@@ -337,7 +347,7 @@ const DepartmentInspectorPage: React.FC = () => {
               <Database size={24} className="text-[#263A81]" />
               <h2 className="text-xl font-bold text-[#1F2937]">Unit Personnel</h2>
               <span className="text-sm text-[#6B7280] bg-gray-100 px-3 py-1 rounded-full">
-                {totalEmployees} employees
+                {totalEmployees} members
               </span>
             </div>
             <div className="relative">

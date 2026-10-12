@@ -9,7 +9,7 @@ import { apiFetch } from '../api/api';
 export interface Department {
   id?: number;
   nom_departement: string;
-  chef_departementId?: number;
+  chef_DepartementId?: number;
   description?: string;
   cree_le?: string;
   isActive?: boolean;
@@ -36,7 +36,7 @@ export interface CreateDepartmentInput {
 
 export interface UpdateDepartmentInput {
   nom_departement?: string;
-  chef_departementId?: number;
+  chef_DepartementId?: number;
   description?: string;
 }
 
@@ -93,7 +93,7 @@ const normalizeDepartment = (dept: any): Department => {
   return {
     id: dept.id,
     nom_departement: dept.nom_departement,
-    chef_departementId: dept.chef_departementId ? Number(dept.chef_departementId) : undefined,
+    chef_DepartementId: dept.chef_DepartementId ? Number(dept.chef_DepartementId) : undefined,
     description: dept.description,
     cree_le: dept.cree_le,
     isActive: dept.isActive !== undefined ? dept.isActive : true,
@@ -109,7 +109,7 @@ export async function getDepartments(): Promise<ApiResponse<Department[]>> {
   try {
     const headers = await getHeaders();
     
-    const response = await fetch(`${API_URL}/departments`, {
+    const response = await fetch(`${ process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'}/departments`, {
       method: 'GET',
       headers: {
        'Content-Type': 'application/json',
@@ -219,7 +219,7 @@ export async function updateDepartment(departmentId: number,  input: UpdateDepar
       headers,
       body: JSON.stringify({
         nom_departement: input.nom_departement?.trim(),
-        chef_DepartementId: input.chef_departementId,
+        chef_DepartementId: input.chef_DepartementId,
         description: input.description?.trim(),
       }),
     });

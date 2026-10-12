@@ -5,7 +5,7 @@
 import { ApiError } from 'next/dist/server/api-utils';
 import { cookies } from 'next/headers';
 
-export type UserRole = 'ADMIN' | 'HOD' | 'EMPLOYER';
+export type UserRole = 'ADMIN' | 'HOD' | 'EMPLOYEE';
 export type UserStatus = 'true' | 'false';
 
 export interface User {
@@ -18,7 +18,7 @@ export interface User {
   createdAt?: string;
   status?: UserStatus | boolean;
   role?: UserRole;
-  departmentId?: number;
+  departementId?: number;
 }
 
 export interface CreateUserInput {
@@ -26,7 +26,7 @@ export interface CreateUserInput {
   email: string;
   password: string;
   role: UserRole;
-  departement?: string;
+  departementId?: number | '';
   telephone?: string;
   status?: UserStatus;
 }
@@ -36,7 +36,7 @@ export interface UpdateUserInput {
   email?: string;
   password?: string;
   role?: UserRole;
-  departement?: string;
+  departementId?: number | '';
   telephone?: string;
   status?: UserStatus;
 }
@@ -95,7 +95,7 @@ export async function getUsers(): Promise<ApiResponse<User[]>> {
   try {
     const headers = await getHeaders();
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users/employees`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users`, {
       method: 'GET',
       headers,
     });
@@ -114,7 +114,7 @@ export async function getUserById(userId: number): Promise<ApiResponse<User>> {
   try {
     const headers = await getHeaders();
     
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users/${userId}`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/profile`, {
       method: 'GET',
       headers,
     });
@@ -134,8 +134,8 @@ export async function createUser(input: CreateUserInput): Promise<ApiResponse<Us
     const headers = await getHeaders();
     const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
     
-    // const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users`, {
-    const response = await fetch(`${API_URL}/users/employee`, {
+    
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users/employee`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -143,7 +143,7 @@ export async function createUser(input: CreateUserInput): Promise<ApiResponse<Us
         email: input.email,
         password: input.password,
         telephone: input.telephone,
-        departementId: Number(input.departement ?? input.departement),
+        departementId: Number(input.departementId) || null,
       }),
     });
 
@@ -162,7 +162,7 @@ export async function updateUser(userId: number, input: UpdateUserInput): Promis
     const headers = await getHeaders();
     
     const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/users/${userId}`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers,
       body: JSON.stringify(input),
     });
@@ -214,6 +214,27 @@ export async function getUsersByDepartment(departmentId: number): Promise<ApiRes
     };
   }
 }
+
+// Dans userActions.ts
+
+// export async function getCurrentUser(): Promise<ApiResponse<User>> {
+//   try {
+//     const headers = await getHeaders();
+    
+//     const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/profile`, {
+//       method: 'GET',
+//       headers,
+//     });
+
+//     return await handleResponse(response);
+//   } catch (error) {
+//     return {
+//       success: false,
+//       message: 'Failed to fetch current user',
+//       error: error instanceof Error ? error.message : 'Network error',
+//     };
+//   }
+// }
 
 export async function getUsersByRole(role: UserRole): Promise<ApiResponse<User[]>> {
   try {

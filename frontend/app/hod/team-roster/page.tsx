@@ -70,12 +70,12 @@ const HODTeamRosterPage: React.FC = () => {
   const [employeeToRemove, setEmployeeToRemove] = useState<Employee | null>(null);
   const [confirmationInput, setConfirmationInput] = useState<string>('');
 
-  // HOD user info - In production, this would come from auth context
-  const hodUserId = 1; // Placeholder - should come from auth
-  const departmentId = 1; // Placeholder - should come from auth
-  const hodName = 'Dr. Sarah Taylor';
-  const hodInitials = 'ST';
-  const departmentName = 'IT Architecture';
+  // // HOD user info - In production, this would come from auth context
+  // const hodUserId = 1; // Placeholder - should come from auth
+  // const departmentId = 1; // Placeholder - should come from auth
+  // const hodName = 'Dr. Sarah Taylor';
+  // const hodInitials = 'ST';
+  // const departmentName = 'IT Architecture';
 
   // ========== LOAD DATA ==========
   const loadData = async () => {
@@ -96,7 +96,10 @@ const HODTeamRosterPage: React.FC = () => {
       }
 
       // Fetch department
-      const deptResult = await getDepartmentById(departmentId);
+      const deptResult = await getDepartmentById(1); // Placeholder department ID
+
+      console.log('Résultat getDepartmentById :', deptResult);
+
       if (deptResult.success && deptResult.data) {
         setDepartment(deptResult.data);
       }
@@ -113,7 +116,7 @@ const HODTeamRosterPage: React.FC = () => {
 
   // ===== DERIVED STATE =====
   // Get users in HOD's department
-  const departmentUsers = users.filter(u => u.departmentId === department?.id);
+  const departmentUsers = users.filter((user) => user.role === 'EMPLOYEE' && Number(user.departmentId) === Number(department?.id));
   const departmentUserIds = departmentUsers.map(u => u.id).filter((id): id is number => id !== undefined);
 
   // Build employee objects
@@ -125,7 +128,7 @@ const HODTeamRosterPage: React.FC = () => {
     // Recent tasks (last 3)
     const recentTasks: RecentTask[] = userTasks.slice(0, 3).map(task => ({
       id: task.id!,
-      title: task.titre || '',
+      title: task.title || '',
       assignedDate: task.cree_le || new Date().toISOString(),
       status: task.status === 'Terminer' ? 'completed' : 
               task.status === 'En_cours' ? 'in-progress' : 'pending',
@@ -234,9 +237,9 @@ const HODTeamRosterPage: React.FC = () => {
       <HODLayout
         pageTitle="Departmental Team Roster & Administration"
         pageSubtitle="Loading team roster..."
-        departmentName={departmentName}
-        hodName={hodName}
-        hodInitials={hodInitials}
+        departmentName={department?.nom_departement || 'Department'}
+        hodName="Head of Department"
+        hodInitials="HOD"
         showCreateButton={false}
       >
         <div className="flex items-center justify-center min-h-[400px]">
@@ -254,9 +257,9 @@ const HODTeamRosterPage: React.FC = () => {
     <HODLayout
       pageTitle="Departmental Team Roster & Administration"
       pageSubtitle={`Unit Control Scope: ${department?.nom_departement || 'Department'} Staff Only`}
-      departmentName={departmentName}
-      hodName={hodName}
-      hodInitials={hodInitials}
+      departmentName={department?.nom_departement || 'Department'}
+      hodName="Head of Department"
+      hodInitials="HOD"
       showCreateButton={false}
     >
       {/* Success Banner */}

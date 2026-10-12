@@ -17,7 +17,7 @@ export function createUser(data: any) {
 
 export function updateUser(id: number, data: any) {
   return apiFetch(`/users/${id}`, {
-    method: "PUT",
+    method: "PATCH",
     body: JSON.stringify(data),
   });
 }

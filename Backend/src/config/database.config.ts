@@ -1,7 +1,5 @@
 import { registerAs } from "@nestjs/config";
 
-// TEST
-
 
 export default registerAs( 'database', () => ({
     type: 'mysql' as const,

@@ -48,9 +48,9 @@ interface UserFormData {
   email: string;
   password: string;
   role: UserRole;
-  departement: string;
+  departementId: number | '';
   telephone: string;
-  status: string;
+  status: boolean;
 }
 
 // ========== MAIN COMPONENT ==========
@@ -81,9 +81,9 @@ const AdminControlCenterPage = () => {
     email: '',
     password: '',
     role: 'EMPLOYEE',
-    departement: '',
+    departementId: '',
     telephone: '',
-    status: 'true',
+    status: true,
   });
 
   const [editFormData, setEditFormData] = useState<UserFormData>({
@@ -91,9 +91,9 @@ const AdminControlCenterPage = () => {
     email: '',
     password: '',
     role: 'EMPLOYEE',
-    departement: '',
+    departementId: '',
     telephone: '',
-    status: 'true',
+    status: true,
   });
 
   // ========== LOAD DATA ==========
@@ -131,9 +131,9 @@ const AdminControlCenterPage = () => {
   // ========== DERIVED STATE ==========
   const filteredUsers = users.filter((user) => {
     const deptName =
-      typeof user.departement === 'string'
-      ? user.departement
-      : (user.departement as any)?.nom_departement || '';
+      typeof user.departementId === 'number'
+      ? user.departementId
+      : (user.departementId as any)?.departementId || '';
 
     const matchesSearch =
       (user.nom || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -174,8 +174,8 @@ const AdminControlCenterPage = () => {
 
   const departmentStats = departments.map((dept) => ({
     name: dept.nom_departement || 'Unnamed',
-    count: users.filter((u) => u.departmentId === dept.id).length,
-    hod: users.find((u) => u.id === dept.chef_departementId)?.nom,
+    count: users.filter((u) => u.departementId === dept.id).length,
+    hod: users.find((u) => u.id === dept.chef_DepartementId)?.nom,
   }));
 
   // ========== HELPER FUNCTIONS ==========
@@ -228,9 +228,9 @@ const AdminControlCenterPage = () => {
       email: '',
       password: '',
       role: 'EMPLOYEE',
-      departement: '',
+      departementId: '',
       telephone: '',
-      status: 'true',
+      status: true,
     });
     setIsCreateModalOpen(true);
   };
@@ -240,19 +240,37 @@ const AdminControlCenterPage = () => {
   };
   
   const openEditModal = (user: ApiUser) => {
-    setSelectedUser(user);
-    let userStatus = typeof user.status === 'boolean' ? user.status : user.status ?? 'true';
-    setEditFormData({
-      nom: user.nom || '',
-      email: user.email || '',
-      password: '',
-      role: user.role || 'EMPLOYEE',
-      departement: typeof user.departement === 'string' ? user.departement : (user.departement as any)?.nom_departement || '',
-       telephone: user.telephone || '',
-      status: userStatus,
-    });
-    setIsEditModalOpen(true);
-  };
+  setSelectedUser(user);
+
+  setEditFormData({
+    nom: user.nom || '',
+    email: user.email || '',
+    password: '',
+    role: user.role || 'EMPLOYEE',
+    departementId:
+      typeof user.departementId === 'number'
+        ? user.departementId
+        : (user.departement as any)?.departementId ?? '',
+    telephone: user.telephone || '',
+    status: Boolean(user.status), // conversion simple et sûre
+  });
+
+  setIsEditModalOpen(true);
+};
+  // const openEditModal = (user: ApiUser) => {
+  //   setSelectedUser(user);
+  //   let userStatus = typeof user.status === 'boolean' ? user.status : user.status ?? 'true';
+  //   setEditFormData({
+  //     nom: user.nom || '',
+  //     email: user.email || '',
+  //     password: '',
+  //     role: user.role || 'EMPLOYEE',
+  //     departementId: typeof user.departementId === 'number' ? user.departementId : (user.departement as any)?.departementId || '',
+  //      telephone: user.telephone || '',
+  //     status: userStatus,
+  //   });
+  //   setIsEditModalOpen(true);
+  // };
 
   const closeEditModal = () => {
     setIsEditModalOpen(false);
@@ -335,7 +353,7 @@ const AdminControlCenterPage = () => {
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: name === 'departementId' ? (value === '' ? '' : Number(value)) : value }));
   };
 
   const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -578,13 +596,21 @@ const AdminControlCenterPage = () => {
                           <td className="py-3.5 px-6">
                             <div className="flex items-center gap-1.5">
                               <Building size={14} className="text-[#6B7280]" />
-                              {/* <span className="text-[#1F2937]">{user.departement || 'Unassigned'}</span> */}
                               <span className="text-[#1F2937]">
-                                { user.departement === 'string'
-                                ? user.departement
-                                : user.departement?.nom_departement ?? 'Unassigned'}
-                                </span>
+                                {typeof user.departementId === 'number'
+                                ? user.departementId
+                                : (user.departementId as any)?.nom || (user.departementId as any)?.name || 'Unassigned'}
+                              </span>
                             </div>
+                            {/* <div className="flex items-center gap-1.5">
+                              <Building size={14} className="text-[#6B7280]" />
+                               <span className="text-[#1F2937]">{user.departement || 'Unassigned'}</span> 
+                              <span className="text-[#1F2937]">
+                                { user.departementId === 'number'
+                                ? user.departementId
+                                : user.departementId?.departementId ?? 'Unassigned'}
+                                </span>
+                            </div> */}
                           </td>
                           <td className="py-3.5 px-6">
                             <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
@@ -654,10 +680,10 @@ const AdminControlCenterPage = () => {
                 </div>
               ) : (
                 departments.map((dept) => {
-                  const hodId = dept.chef_departementId ? Number(dept.chef_departementId) : undefined;
+                  const hodId = dept.chef_DepartementId ? Number(dept.chef_DepartementId) : undefined;
                   const hod = users.find(u => u.id === hodId);
-                  const employeeCount = users.filter(u => u.departmentId === dept.id).length;
-                  const taskCount = tasks.filter(t => t.userId && users.find(u => u.id === t.userId && u.departmentId === dept.id)).length;
+                  const employeeCount = users.filter(u => u.departementId === dept.id).length;
+                  const taskCount = tasks.filter(t => t.userId && users.find(u => u.id === t.userId && u.departementId === dept.id)).length;
 
                   return (
                     <div
@@ -830,16 +856,16 @@ const AdminControlCenterPage = () => {
                     Department
                   </label>
                   <select
-                    id="departement"
-                    name="departement"
-                    value={formData.departement}
+                    id="edit-departementId"
+                    name="departementId"
+                    value={formData.departementId || ''}
                     onChange={handleFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     disabled={isSubmitting}
                   >
                     <option value="">Choisir un département</option>
                     {departments.map((dept) => (
-                      <option key={dept.id} value={String(dept.id)}>
+                      <option key={dept.id} value={dept.id}>
                         {dept.nom_departement}
                       </option>
                     ))}
@@ -886,6 +912,7 @@ const AdminControlCenterPage = () => {
       )}
 
       {/* ===== EDIT USER MODAL ===== */}
+
       {isEditModalOpen && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in">
@@ -958,7 +985,7 @@ const AdminControlCenterPage = () => {
                   />
                 </div>
 
-                <div>
+                {/* <div>
                   <label htmlFor="edit-password" className="block text-sm font-medium text-[#1F2937] mb-1.5">
                     New Password (optional)
                   </label>
@@ -982,7 +1009,7 @@ const AdminControlCenterPage = () => {
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
-                </div>
+                </div> */}
 
                 <div>
                   <label htmlFor="edit-role" className="block text-sm font-medium text-[#1F2937] mb-1.5">
@@ -1003,14 +1030,14 @@ const AdminControlCenterPage = () => {
                   </select>
                 </div>
 
-                <div>
+                {/* <div>
                   <label htmlFor="edit-departement" className="block text-sm font-medium text-[#1F2937] mb-1.5">
-                    Department
+                    DepartmentId
                   </label>
                   <select
-                    id="edit-departement"
+                    id="edit-departementId"
                     name="departement"
-                    value={editFormData.departement}
+                    value={editFormData.departementId ?? ""}
                     onChange={handleEditFormChange}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     disabled={isSubmitting}
@@ -1022,6 +1049,31 @@ const AdminControlCenterPage = () => {
                       </option>
                     ))}
                   </select>
+                </div> */}
+                <div>
+                  <label
+                    htmlFor="edit-departementId"
+                    className="block text-sm font-medium text-[#1F2937] mb-1.5"
+                  >
+                    Department
+                  </label>
+
+                  <select
+                    id="edit-departementId"
+                    name="departementId"
+                    value={editFormData.departementId ?? ""}
+                    onChange={handleEditFormChange}
+                    className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    disabled={isSubmitting}
+                  >
+                    <option value="">Unassigned</option>
+
+                    {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.nom_departement}
+                    </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -1031,16 +1083,9 @@ const AdminControlCenterPage = () => {
                   <select
                     id="edit-status"
                     name="status"
-                    value={
-                      editFormData.status=== true ? 'true' : 
-                      editFormData.status === false ? 'false' : 
-                      'true'
-                    }
-                    onChange={(e) => {
-                      const value = e.target.value === 'true' ? true : 
-                                    e.target.value === 'false' ? false : 
-                                    'true';
-                      setEditFormData(prev => ({ ...prev, status: value }));
+                    value={editFormData.status ? 'true' : 'false'}
+                    onChange={(e) => {                               
+                      setEditFormData(prev => ({ ...prev, status: e.target.value === 'true' }));
                     }}
                     className="w-full h-11 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
                     required

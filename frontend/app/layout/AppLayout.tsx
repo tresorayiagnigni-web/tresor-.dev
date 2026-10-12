@@ -56,8 +56,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       {/* SIDEBAR */}
       <aside className="hidden md:flex md:flex-col md:w-[240px] flex-shrink-0 bg-[#263A81] text-white h-screen fixed top-0 left-0 overflow-y-auto z-30">
         <div className="p-6 border-b border-white/10">
-          <div className="text-2xl font-bold tracking-tight">MENDO-RH</div>
-          <div className="text-xs font-light opacity-70 mt-1">Admin Control Center</div>
+
+           <div className="flex items-center gap-3 mb-8">
+                  {/* Logo */}
+                  <div className="flex w-14 h-14 shrink-0 items-center justify-center bg-white rounded-lg">
+                    <img src="/logo.png" alt="logo" width={56} height={56} className="block h-full w-full object-contain" />
+                  </div>
+
+                  {/* HOD Info */}
+                  <div className="min-w-0">
+                    <div className="text-2xl font-bold tracking-tight leading-tight">MENDO<br />company</div>
+                    <div className="text-xs font-light opacity-70 mt-2">
+                      Admin Control Center
+                    </div>
+                  </div>
+                </div>
+
+          {/* <div className="text-2xl font-bold tracking-tight">MENDO <br />company</div>
+          <div className="text-xs font-light opacity-70 mt-1">Admin Control Center</div> */}
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2">
           <Link href="/admin/control-center" className={getNavItemClasses('/admin/control-center')}>
@@ -89,7 +105,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <button onClick={toggleMobileMenu} className="md:hidden p-2 hover:bg-gray-100 rounded-lg transition">
               <Menu size={24} className="text-[#1F2937]" />
             </button>
-            <span className="text-xl font-bold text-[#263A81] hidden md:inline">MENDO-RH</span>
+            <span className="text-xl font-bold text-[#263A81] hidden md:inline">MENDO</span>
           </div>
           <div className="flex items-center gap-3">
             <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
@@ -114,7 +130,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             <div className="absolute left-0 top-0 h-full w-[280px] bg-[#263A81] text-white p-6 shadow-xl animate-slide-in">
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <div className="text-2xl font-bold tracking-tight">MENDO-RH</div>
+                  <div className="text-2xl font-bold tracking-tight">MENDO</div>
                   <div className="text-xs font-light opacity-70 mt-1">Admin Control Center</div>
                 </div>
                 <button onClick={toggleMobileMenu} className="p-2 hover:bg-white/10 rounded-lg transition">

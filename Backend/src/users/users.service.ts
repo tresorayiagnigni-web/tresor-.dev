@@ -29,35 +29,36 @@ export class UsersService {
 
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({
-     where: { 
-      email 
-    },
-    select: {
-      id: true,
-      email: true,
-      password: true,     // ← obligatoire
-      role: true,
-      nom: true,
-      departement: true,
-      telephone: true,
-      status: true,
-      cree_le: true,
-    } });
+      where: { 
+        email 
+      },
+      select: {
+        id: true,
+        email: true,
+        password: true,     // ← obligatoire
+        role: true,
+        nom: true,
+        departement: true,
+        telephone: true,
+        status: true,
+        cree_le: true,
+      } 
+    });
   }
 
-   async findById(id: number): Promise<User> {
-  const user = await this.userRepository
+  async findById(id: number): Promise<User> {
+    const user = await this.userRepository
     .createQueryBuilder('user')
     .where('user.id = :id', { id })
     .addSelect('user.password')   // ← force le chargement du password
     .getOne();
 
-  if (!user) {
-    throw new NotFoundException('Utilisateur introuvable');
-  }
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
 
-  return user;
-}
+    return user;
+  }
    
   async createAdmin(dto: { email: string, password: string, nom: string, telephone: string}): Promise<User> {
     const existing = await this.findByEmail(dto.email);
@@ -86,7 +87,8 @@ export class UsersService {
       throw new ConflictException('Cet email est déjà utilisé');
     }
 
-    // 2. Département obligatoire pour un EMPLOYEE
+    //  Département obligatoire pour un EMPLOYEE
+
     if (!departementId) {
       throw new BadRequestException('Le département est obligatoire pour un employé');
     }
@@ -112,7 +114,9 @@ export class UsersService {
     const savedUser = await this.userRepository.save(user);
 
     const result = await this.userRepository.findOne({
-      where: { id: savedUser.id },
+      where: {
+        id: savedUser.id 
+      },
       relations: {
         departement: true,
       },
@@ -145,6 +149,7 @@ export class UsersService {
     }
 
     // HOD : seulement les employés de son département
+
     if (user.role === Role.HOD) {
       if (!user.departement) {
         throw new BadRequestException("Le HOD n'a pas de département assigné");
@@ -153,9 +158,13 @@ export class UsersService {
       return this.userRepository.find({
         where: {
           role: Role.EMPLOYEE,
-          departement: { id: user.departement.id },
+          departement: {
+            id: user.departement.id
+          },
         },
-        relations: { departement: true },
+        relations: { 
+          departement: true 
+        },
       });
     }
 
@@ -203,6 +212,7 @@ export class UsersService {
     }
 
     // Vérifier l'email
+
     if (updateUserDto.email && updateUserDto.email !== user.email) {
       const existingUser = await this.userRepository.findOne({
         where: {
@@ -218,6 +228,7 @@ export class UsersService {
     }
   
     // Modifier le département
+
     if (updateUserDto.departementId !== undefined) {
 
       const department = await this.departmentRepository.findOne({
@@ -235,6 +246,7 @@ export class UsersService {
     }
 
     // Ne pas modifier le password
+
     const {
       password,
       departementId,
@@ -244,24 +256,25 @@ export class UsersService {
     };
 
     // Modifier les autres champs
+
     Object.assign(user, dataToUpdate);
 
     return await this.userRepository.save(user);
   }
 
   // Supprimer un utilisateur par son ID
+
   async remove(id: number): Promise<{ message: string }> {
-  const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({ where: { id } });
 
-  if (!user) {
-    throw new NotFoundException('Utilisateur introuvable');
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    await this.userRepository.remove(user);
+
+    return { message: 'Utilisateur supprimé avec succès' };
   }
-
-  await this.userRepository.remove(user);
-  // ou : await this.userRepository.delete(id);
-
-  return { message: 'Utilisateur supprimé avec succès' };
-}
 
   async updateStatus(id: number, dto: UpdateStatusDto) {
     const user = await this.userRepository.findOne({ where: { id } });
@@ -269,7 +282,7 @@ export class UsersService {
       throw new NotFoundException(`Utilisateur avec l'ID ${id} non trouvé`);
     }
 
-    // Empêcher de désactiver son propre compte (optionnel mais recommandé)
+    // Empêcher de désactiver son propre compte
    // if (user.id === currentUserId) { ... }
 
     user.status = dto.status;
@@ -283,6 +296,31 @@ export class UsersService {
         status: Boolean(user.status)
       }
     };
+  }
+
+  async findUsersInMyDepartment(currentUserId: number): Promise<User[]> {
+    // 1. Récupérer l'utilisateur connecté avec son département
+    const currentUser = await this.userRepository.findOne({
+      where: { id: currentUserId },
+      select: {id: true, departementId: true},
+    });
+
+    if (!currentUser) {
+      throw new NotFoundException('Utilisateur non trouvé');
+    }
+
+    if (!currentUser.departementId) {
+      return []; // Pas de département → liste vide
+    }
+
+    // 2. Récupérer tous les utilisateurs du même département
+    const users = await this.userRepository.find({
+      where: { departementId: currentUser.departementId },
+      select: {id: true, nom: true, email: true}, // On ne renvoie que le nécessaire
+      order: { nom: 'ASC' },
+    });
+
+    return users;
   }
 
 }

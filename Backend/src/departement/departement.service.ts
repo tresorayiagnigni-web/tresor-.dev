@@ -145,6 +145,12 @@ export class DepartmentService {
   }
 
   async update(id: number, updateDepartmentDto: UpdateDepartmentDto) {
+
+    console.log('🔥 UPDATE DEPARTMENT BACKEND');
+console.log('ID:', id);
+console.log('DTO REÇU:', updateDepartmentDto);
+console.log('CHEF ID:', updateDepartmentDto.chef_DepartementId);
+
   const department = await this.departmentRepository.findOne({
     where: { id },
     relations: { chef_departement: true },
@@ -206,6 +212,18 @@ console.log('HOD:', {
      // Mettre à jour la relation
     department.chef_departement = nouveauChef;
   }
+
+//   if (dto.chef_DepartementId !== undefined) {
+//   const chef = await this.usersRepository.findOne({
+//     where: { id: dto.chef_DepartementId },
+//   });
+
+//   if (!chef) {
+//     throw new NotFoundException('Utilisateur introuvable');
+//   }
+
+//   department.chef_departement = chef;
+// }
 
   // Sauvegarder le département
   const updatedDepartment =

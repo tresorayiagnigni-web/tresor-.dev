@@ -63,15 +63,20 @@ const AdminActivityPage: React.FC = () => {
         getDepartments(),
       ]);
 
-      if (taskResult.success && taskResult.data) {
-        setTasks(taskResult.data);
+      if (!taskResult.success || !taskResult.data) {
+        throw new Error(taskResult.message || 'Failed to load tasks');
       }
-      if (userResult.success && userResult.data) {
-        setUsers(userResult.data);
+      setTasks(taskResult.data);
+
+      if (!userResult.success || !userResult.data) {
+        throw new Error(userResult.message || 'Failed to load users');
       }
-      if (deptResult.success && deptResult.data) {
-        setDepartments(deptResult.data);
+      setUsers(userResult.data);
+
+      if (!deptResult.success || !deptResult.data) {
+        throw new Error(deptResult.message || 'Failed to load departments');
       }
+      setDepartments(deptResult.data);
     } catch (err) {
       setError('Failed to load activity data');
     }
@@ -87,7 +92,7 @@ const AdminActivityPage: React.FC = () => {
   // Map tasks to display format
   const mappedTasks = tasks.map(task => {
     const assignedUser = users.find(u => u.id === task.userId);
-    const department = departments.find(d => d.id === assignedUser?.departmentId);
+    const department = departments.find(d => d.id === assignedUser?.departementId);
 
     const statusMap: Record<string, 'pending' | 'in-progress' | 'completed'> = {
       'A_faire': 'pending',
@@ -603,7 +608,7 @@ const AdminActivityPage: React.FC = () => {
             ) : (
               departments.map((dept) => {
                 // Get users in this department
-                const deptUsers = users.filter(u => u.departmentId === dept.id);
+                const deptUsers = users.filter(u => u.departementId === dept.id);
                 const deptUserIds = deptUsers.map(u => u.id).filter((id): id is number => id !== undefined);
                 
                 // Get tasks for users in this department

@@ -65,7 +65,9 @@ const HODProfilePage: React.FC = () => {
     try {
       // Fetch HOD user data
       const userResult = await getUserById(hodUserId);
-      if (userResult.success && userResult.data) {
+      if (userResult.success || !userResult.data) {
+        throw new Error(userResult.message || 'Impossible de récupérer les informations de l\'utilisateur');
+      }
         const user = userResult.data;
         setFormData(prev => ({
           ...prev,
@@ -73,14 +75,15 @@ const HODProfilePage: React.FC = () => {
           email: user.email || '',
           phoneNumber: user.telephone || '',
         }));
-      }
 
       // Fetch department data
       const deptResult = await getDepartmentById(departmentId);
-      if (deptResult.success && deptResult.data) {
+      if (deptResult.success || !deptResult.data) {
+        throw new Error(deptResult.message || 'Impossible de récupérer les informations du département');
+      }
         setDepartment(deptResult.data);
       }
-    } catch (err) {
+     catch (err) {
       setError('Failed to load profile data');
     }
 
