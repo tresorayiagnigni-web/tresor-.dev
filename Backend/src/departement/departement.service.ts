@@ -8,7 +8,7 @@ import { UpdateDepartmentDto } from './dto/update-departement.dto';
 import { AssignChefDto } from './dto/assign-chef.dto';
 import { User } from 'src/users/entities/user.entity';
 import { Role } from 'src/auth/enums/role.enum';
-import { id } from 'node_modules/date-fns/locale/id';
+// import { id } from 'node_modules/date-fns/locale/id';
 
 @Injectable()
 export class DepartmentService {

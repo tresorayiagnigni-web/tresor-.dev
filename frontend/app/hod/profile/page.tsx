@@ -58,37 +58,46 @@ const HODProfilePage: React.FC = () => {
   });
 
   // ========== LOAD DATA ==========
-  const loadData = async () => {
-    setIsLoading(true);
-    setError(null);
+ const loadData = async () => {
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      // Fetch HOD user data
-      const userResult = await getUserById(hodUserId);
-      if (userResult.success || !userResult.data) {
-        throw new Error(userResult.message || 'Impossible de récupérer les informations de l\'utilisateur');
-      }
-        const user = userResult.data;
-        setFormData(prev => ({
-          ...prev,
-          fullName: user.nom || '',
-          email: user.email || '',
-          phoneNumber: user.telephone || '',
-        }));
-
-      // Fetch department data
-      const deptResult = await getDepartmentById(departmentId);
-      if (deptResult.success || !deptResult.data) {
-        throw new Error(deptResult.message || 'Impossible de récupérer les informations du département');
-      }
-        setDepartment(deptResult.data);
-      }
-     catch (err) {
-      setError('Failed to load profile data');
+  try {
+    // 1. Charger l'utilisateur
+    const userResult = await getUserById(hodUserId);
+    
+    if (!userResult.success || !userResult.data) {
+      throw new Error(userResult.message || "Impossible de récupérer les informations de l'utilisateur");
     }
 
+    const user = userResult.data;
+    setFormData(prev => ({
+      ...prev,
+      fullName: user.nom || '',
+      email: user.email || '',
+      phoneNumber: user.telephone || '',
+    }));
+
+    // 2. Charger le département (sans faire planter la page)
+    try {
+      const deptResult = await getDepartmentById(departmentId);
+      if (deptResult.success && deptResult.data) {
+        setDepartment(deptResult.data);
+      } else {
+        console.warn("Département non accessible :", deptResult.message);
+        // On laisse department = null, la page continue de fonctionner
+      }
+    } catch (deptErr) {
+      console.warn("Erreur lors du chargement du département :", deptErr);
+    }
+
+  } catch (err) {
+    console.error(err);
+    setError(err instanceof Error ? err.message : 'Failed to load profile data');
+  } finally {
     setIsLoading(false);
-  };
+  }
+};
 
   useEffect(() => {
     loadData();

@@ -6,7 +6,6 @@ import React, { useState, useEffect } from 'react';
 import { HODLayout } from '@/app/layout/HodLayout';
 import {
   Users,
-  User,
   LogOut,
   Bell,
   Briefcase,
@@ -116,7 +115,7 @@ const HODTeamRosterPage: React.FC = () => {
 
   // ===== DERIVED STATE =====
   // Get users in HOD's department
-  const departmentUsers = users.filter((user) => user.role === 'EMPLOYEE' && Number(user.departmentId) === Number(department?.id));
+  const departmentUsers = users.filter((user) => user.role === 'EMPLOYEE' && department !== null && Number(user.departementId) === Number(department.id));
   const departmentUserIds = departmentUsers.map(u => u.id).filter((id): id is number => id !== undefined);
 
   // Build employee objects

@@ -103,7 +103,7 @@ const EmployeeProfilePage: React.FC = () => {
       setEmployeeId(userId);
 
       // Fetch user data
-      const userResult = await getCurrentUser();
+      const userResult = await getUserById(userId);
       if (userResult.success && userResult.data) {
         const userData = userResult.data;
         setUser(userData);
@@ -157,7 +157,7 @@ const EmployeeProfilePage: React.FC = () => {
   
   const userStatus = user?.status === 'true' || user?.status === true;
   const userPhone = user?.telephone || 'Not provided';
-  const userDepartment = department?.nom_departement || user?.departement || 'Not assigned';
+  const userDepartment = department?.nom_departement || (typeof user?.departement === 'string' ? user.departement : undefined) || 'Not assigned';
   const userEmail = user?.email || 'No email on file';
 
   // ===== EVENT HANDLERS =====
