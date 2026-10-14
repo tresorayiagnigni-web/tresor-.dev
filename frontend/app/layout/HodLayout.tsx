@@ -65,8 +65,8 @@ export const HODLayout: React.FC<HODLayoutProps> = ({
       <aside className="hidden md:flex md:flex-col md:w-[240px] flex-shrink-0 bg-[#263A81] text-white h-screen fixed top-0 left-0 overflow-y-auto z-30">
          <div className="flex items-center gap-3 mb-8">
                   {/* Logo */}
-                  <div className="flex w-14 h-14 shrink-0 items-center justify-center bg-white rounded-lg">
-                    <img src="/logo.png" alt="logo" width={56} height={56} className="block h-full w-full object-contain" />
+                  <div className="flex w-14 h-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-1">
+                    <img src="/logo.png" alt="logo" width={56} height={56} className="block h-full w-full rounded-full object-cover" />
                   </div>
 
                   {/* HOD Info */}

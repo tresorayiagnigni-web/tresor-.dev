@@ -28,7 +28,8 @@ import {
   type TaskStatus,
   type TaskPriority,
 } from '@/lib/actions/taskActions';
-import { type User } from '@/lib/actions/userActions';
+import { getProfile, type User } from '@/lib/actions/userActions';
+import { getDepartmentById } from '@/lib/actions/departmentActions';
 
 // ========== TYPE DEFINITIONS ==========
 interface TaskFormData {
@@ -38,6 +39,24 @@ interface TaskFormData {
   priorite: TaskPriority;
   userId: string;
 }
+
+// Le profil renvoyé par le backend peut avoir plusieurs formes.
+type ProfileShape = {
+  nom?: string;
+  name?: string;
+  departementId?: number | string | null;
+  departmentId?: number | string | null;
+  departement?: {
+    id?: number | string | null;
+    nom_departement?: string;
+  } | null;
+};
+
+// Convertit une date (ISO ou autre) en "YYYY-MM-DD" pour <input type="date">.
+const toDateInputValue = (value?: string | Date | null): string => {
+  if (!value) return '';
+  return String(value).slice(0, 10);
+};
 
 // ========== MAIN COMPONENT ==========
 const HODTaskManagerPage: React.FC = () => {
@@ -64,10 +83,63 @@ const HODTaskManagerPage: React.FC = () => {
     userId: '',
   });
 
-  // HOD info (à remplacer plus tard par le vrai auth)
-  const hodName = 'Dr. Sarah Taylor';
-  const hodInitials = 'ST';
-  const departmentName = 'IT Architecture';
+  // Infos du HOD (chargées depuis le profil réel)
+  const [hodName, setHodName] = useState<string>('Responsable de département');
+  const [departmentName, setDepartmentName] = useState<string>('Mon département');
+
+  const hodInitials = hodName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  // ========== LOAD PROFILE ==========
+  const loadProfile = async () => {
+    try {
+      const profileResult = await getProfile();
+
+      if (!profileResult.success || !profileResult.data) {
+        console.error('Profil non chargé :', profileResult);
+        return;
+      }
+
+      const raw = profileResult.data as ProfileShape & {
+        user?: ProfileShape;
+        data?: ProfileShape & { user?: ProfileShape };
+      };
+
+      const profile: ProfileShape =
+        raw.data?.user ?? raw.user ?? raw.data ?? raw;
+
+      setHodName(profile.nom || profile.name || 'Responsable de département');
+
+      // Nom du département : directement dans le profil, sinon via l'API.
+      if (profile.departement?.nom_departement) {
+        setDepartmentName(profile.departement.nom_departement);
+        return;
+      }
+
+      const rawDepartmentId =
+        profile.departementId ??
+        profile.departmentId ??
+        profile.departement?.id;
+
+      const departmentId = Number(rawDepartmentId);
+
+      if (rawDepartmentId != null && Number.isFinite(departmentId)) {
+        const departmentResult = await getDepartmentById(departmentId);
+
+        if (departmentResult.success && departmentResult.data) {
+          setDepartmentName(
+            departmentResult.data.nom_departement || 'Mon département',
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Erreur chargement du profil :', err);
+    }
+  };
 
   // ========== LOAD DATA ==========
   const loadData = async () => {
@@ -75,22 +147,29 @@ const HODTaskManagerPage: React.FC = () => {
     setError(null);
 
     try {
-      // 1. Charger les tâches
+      // 1. Charger les tâches (l'échec est désormais visible à l'écran)
       const taskResult = await getTasks();
-      console.log('Tâches récupérées :', taskResult.data);
-      if (taskResult.success && taskResult.data) {
+
+      console.log('Résultat getTasks complet :', taskResult);
+
+      if (taskResult.success && Array.isArray(taskResult.data)) {
         setTasks(taskResult.data);
-      }
+      } else {
+        setTasks([]);
+        setError(
+          taskResult.message ||
+          taskResult.error ||
+         'Impossible de charger les tâches.',
+       );
+     }
 
-      // 2. Charger les membres du département (via la nouvelle route)
+      // 2. Charger les membres du département
       const usersResult = await getDepartmentUsers();
-
       console.log('Membres de Département :', usersResult);
 
-      if (usersResult.success && usersResult.data) {
+      if (usersResult.success && Array.isArray(usersResult.data)) {
         setDepartmentUsers(usersResult.data);
       } else {
-
         setDepartmentUsers([]);
       }
     } catch (err) {
@@ -102,7 +181,8 @@ const HODTaskManagerPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    void loadProfile();
+    void loadData();
   }, []);
 
   // ===== HELPER FUNCTIONS =====
@@ -156,7 +236,11 @@ const HODTaskManagerPage: React.FC = () => {
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'No date';
-    return new Date(dateString).toLocaleDateString('en-US', {
+
+    const parsed = new Date(dateString);
+    if (Number.isNaN(parsed.getTime())) return 'No date';
+
+    return parsed.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -187,7 +271,8 @@ const HODTaskManagerPage: React.FC = () => {
     setFormData({
       title: task.title || '',
       description: task.description || '',
-      Date_limite: task.Date_limite || '',
+      // <input type="date"> exige le format YYYY-MM-DD
+      Date_limite: toDateInputValue(task.Date_limite),
       priorite: task.priorite || 'Moyen',
       userId: task.userId?.toString() || '',
     });
@@ -229,7 +314,7 @@ const HODTaskManagerPage: React.FC = () => {
     if (result.success && result.data) {
       showSuccess(`Task "${result.data.title}" created successfully!`);
       closeCreateModal();
-      loadData();
+      void loadData();
     } else {
       setError(result.message || 'Failed to create task');
     }
@@ -253,7 +338,7 @@ const HODTaskManagerPage: React.FC = () => {
     if (result.success && result.data) {
       showSuccess(`Task "${result.data.title}" updated successfully!`);
       closeEditModal();
-      loadData();
+      void loadData();
     } else {
       setError(result.message || 'Failed to update task');
     }
@@ -269,7 +354,7 @@ const HODTaskManagerPage: React.FC = () => {
     if (result.success) {
       showSuccess('Task deleted successfully!');
       closeDeleteModal();
-      loadData();
+      void loadData();
     } else {
       setError(result.message || 'Failed to delete task');
     }
@@ -280,14 +365,14 @@ const HODTaskManagerPage: React.FC = () => {
     const result = await updateTaskStatus(taskId, newStatus);
     if (result.success) {
       showSuccess(`Task status updated to ${getStatusBadge(newStatus).label}`);
-      loadData();
+      void loadData();
     } else {
       setError(result.message || 'Failed to update task status');
     }
   };
 
   const handleFormChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -336,9 +421,18 @@ const HODTaskManagerPage: React.FC = () => {
 
       {/* Error Banner */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
-          <AlertCircle size={20} className="text-red-600" />
-          <span className="text-red-800 font-medium">{error}</span>
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={20} className="text-red-600" />
+            <span className="text-red-800 font-medium">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="shrink-0 rounded-lg bg-[#263A81] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1e2f6a]"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -371,7 +465,9 @@ const HODTaskManagerPage: React.FC = () => {
                 tasks.map((task) => {
                   const priorityConfig = getPriorityBadge(task.priorite || 'Moyen');
                   const statusConfig = getStatusBadge(task.status || 'A_faire');
-                  const assignedUser = departmentUsers.find((u) => u.id === task.userId);
+                  const assignedUser = departmentUsers.find(
+                    (u) => Number(u.id) === Number(task.userId),
+                  );
 
                   return (
                     <tr key={task.id} className="hover:bg-gray-50/50 transition">
@@ -406,7 +502,9 @@ const HODTaskManagerPage: React.FC = () => {
                       <td className="py-3.5 px-6">
                         <select
                           value={task.status || 'A_faire'}
-                          onChange={(e) => handleStatusChange(task.id!, e.target.value as TaskStatus)}
+                          onChange={(e) =>
+                            handleStatusChange(task.id!, e.target.value as TaskStatus)
+                          }
                           className={`px-2.5 py-1 rounded-full text-xs font-semibold border-0 ${statusConfig.bg} ${statusConfig.text} cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#263A81]`}
                         >
                           <option value="A_faire">Not Started</option>
@@ -440,146 +538,146 @@ const HODTaskManagerPage: React.FC = () => {
       </div>
 
       {/* ===== CREATE TASK MODAL ===== */}
-{isCreateModalOpen && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-    <div className="bg-white rounded-xl w-full max-w-lg shadow-xl">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <div>
-          <h2 className="text-lg font-semibold text-black">Create New Task</h2>
-          <p className="text-sm text-gray-500">Assign a new task to a department member</p>
-        </div>
-        <button
-          onClick={closeCreateModal}
-          className="text-gray-400 hover:text-gray-600 transition"
-        >
-          <X size={20} />
-        </button>
-      </div>
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-xl w-full max-w-lg shadow-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-semibold text-black">Create New Task</h2>
+                <p className="text-sm text-gray-500">Assign a new task to a department member</p>
+              </div>
+              <button
+                onClick={closeCreateModal}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-      {/* Form */}
-      <form onSubmit={handleCreateTask} className="px-6 py-5 space-y-4">
-        {/* Task Title */}
-        <div>
-          <label className="block text-sm font-medium text-black mb-1.5">
-            Task Title <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            name="title"
-            value={formData.title}
-            onChange={handleFormChange}
-            placeholder="Enter task title"
-            className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent"
-            required
-            disabled={isSubmitting}
-          />
-        </div>
+            {/* Form */}
+            <form onSubmit={handleCreateTask} className="px-6 py-5 space-y-4">
+              {/* Task Title */}
+              <div>
+                <label className="block text-sm font-medium text-black mb-1.5">
+                  Task Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleFormChange}
+                  placeholder="Enter task title"
+                  className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
 
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium text-black mb-1.5">
-            Description
-          </label>
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleFormChange}
-            rows={3}
-            placeholder="Provide detailed task description..."
-            className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent resize-none"
-            disabled={isSubmitting}
-          />
-        </div>
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-black mb-1.5">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleFormChange}
+                  rows={3}
+                  placeholder="Provide detailed task description..."
+                  className="w-full px-3 py-2.5 rounded-lg border border-gray-300 text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent resize-none"
+                  disabled={isSubmitting}
+                />
+              </div>
 
-        {/* Due Date + Priority */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-black mb-1.5">
-              Due Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              name="Date_limite"
-              value={formData.Date_limite}
-              onChange={handleFormChange}
-              className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent"
-              required
-              disabled={isSubmitting}
-            />
+              {/* Due Date + Priority */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-black mb-1.5">
+                    Due Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="Date_limite"
+                    value={formData.Date_limite}
+                    onChange={handleFormChange}
+                    className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent"
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-black mb-1.5">
+                    Priority Scale <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="priorite"
+                    value={formData.priorite}
+                    onChange={handleFormChange}
+                    className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent"
+                    required
+                    disabled={isSubmitting}
+                  >
+                    <option value="Bas">Low</option>
+                    <option value="Moyen">Medium</option>
+                    <option value="Elevee">High</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Assign to */}
+              <div>
+                <label className="block text-sm font-medium text-black mb-1.5">
+                  Assign to <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="userId"
+                  value={formData.userId}
+                  onChange={handleFormChange}
+                  className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#263A81]"
+                  required
+                  disabled={isSubmitting}
+                >
+                  <option value="" disabled>
+                    Select a team member
+                  </option>
+
+                  {departmentUsers.length > 0 ? (
+                    departmentUsers.map((user) => (
+                      <option key={user.id} value={user.id} className="text-black">
+                        {user.nom} ({user.email})
+                      </option>
+                    ))
+                  ) : (
+                    <option disabled>Aucun membre disponible</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeCreateModal}
+                  className="flex-1 h-11 rounded-lg border border-gray-300 text-black font-medium hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 h-11 rounded-lg bg-[#263A81] text-white font-medium hover:bg-[#1e2f6a] transition flex items-center justify-center gap-2"
+                  disabled={isSubmitting || departmentUsers.length === 0}
+                >
+                  <Plus size={18} />
+                  Create Task
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black mb-1.5">
-              Priority Scale <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="priorite"
-              value={formData.priorite}
-              onChange={handleFormChange}
-              className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent"
-              required
-              disabled={isSubmitting}
-            >
-              <option value="Bas">Low</option>
-              <option value="Moyen">Medium</option>
-              <option value="Elevee">High</option>
-            </select>
-          </div>
         </div>
-
-        {/* Assign to */}
-        <div>
-          <label className="block text-sm font-medium text-black mb-1.5">
-            Assign to <span className="text-red-500">*</span>
-          </label>
-          <select
-            name="userId"
-            value={formData.userId}
-            onChange={handleFormChange}
-            className="w-full h-11 px-3 rounded-lg border border-gray-300 text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#263A81]"
-            required
-            disabled={isSubmitting}
->
-            <option value="" disabled>
-            Select a team member
-            </option>
-
-            {departmentUsers.length > 0 ? (
-            departmentUsers.map((user) => (
-            <option key={user.id} value={user.id} className="text-black">
-              {user.nom} ({user.email})
-            </option>
-            ))
-            ) : (
-              <option disabled>Aucun membre disponible</option>
-            )}
-          </select>
-        </div>
-
-        {/* Buttons */}
-        <div className="flex gap-3 pt-2">
-          <button
-            type="button"
-            onClick={closeCreateModal}
-            className="flex-1 h-11 rounded-lg border border-gray-300 text-black font-medium hover:bg-gray-50 transition"
-            disabled={isSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="flex-1 h-11 rounded-lg bg-[#263A81] text-white font-medium hover:bg-[#1e2f6a] transition flex items-center justify-center gap-2"
-            disabled={isSubmitting || departmentUsers.length === 0}
-          >
-            <Plus size={18} />
-            Create Task
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
+      )}
 
       {/* ===== EDIT TASK MODAL ===== */}
       {isEditModalOpen && selectedTask && (
@@ -605,7 +703,7 @@ const HODTaskManagerPage: React.FC = () => {
                   name="title"
                   value={formData.title}
                   onChange={handleFormChange}
-                  className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#263A81]"
+                  className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] text-black focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                   required
                   disabled={isSubmitting}
                 />
@@ -618,7 +716,7 @@ const HODTaskManagerPage: React.FC = () => {
                   value={formData.description}
                   onChange={handleFormChange}
                   rows={3}
-                  className="w-full px-4 py-3 rounded-lg border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#263A81] resize-none"
+                  className="w-full px-4 py-3 rounded-lg border border-[#D1D5DB] text-black focus:outline-none focus:ring-2 focus:ring-[#263A81] resize-none"
                   disabled={isSubmitting}
                 />
               </div>
@@ -633,7 +731,7 @@ const HODTaskManagerPage: React.FC = () => {
                     name="Date_limite"
                     value={formData.Date_limite}
                     onChange={handleFormChange}
-                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#263A81]"
+                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] text-black focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                     required
                     disabled={isSubmitting}
                   />
@@ -647,7 +745,7 @@ const HODTaskManagerPage: React.FC = () => {
                     name="priorite"
                     value={formData.priorite}
                     onChange={handleFormChange}
-                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#263A81]"
+                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                     required
                     disabled={isSubmitting}
                   >
@@ -666,7 +764,7 @@ const HODTaskManagerPage: React.FC = () => {
                   name="userId"
                   value={formData.userId}
                   onChange={handleFormChange}
-                  className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] focus:outline-none focus:ring-2 focus:ring-[#263A81]"
+                  className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] text-black bg-white focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                   required
                   disabled={isSubmitting}
                 >
@@ -717,9 +815,7 @@ const HODTaskManagerPage: React.FC = () => {
 
             <div className="p-6">
               <p className="text-[#1F2937] mb-2">Are you sure you want to delete this task?</p>
-              <p className="text-sm text-[#6B7280]">
-                This action cannot be undone.
-              </p>
+              <p className="text-sm text-[#6B7280]">This action cannot be undone.</p>
             </div>
 
             <div className="flex gap-3 p-6 pt-0">

@@ -215,26 +215,28 @@ export async function getUsersByDepartment(departmentId: number): Promise<ApiRes
   }
 }
 
-// Dans userActions.ts
+export async function getProfile(): Promise<ApiResponse<User>> {
+  try {
+    const headers = await getHeaders();
 
-// export async function getCurrentUser(): Promise<ApiResponse<User>> {
-//   try {
-//     const headers = await getHeaders();
-    
-//     const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/profile`, {
-//       method: 'GET',
-//       headers,
-//     });
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/profile`,
+      {
+        method: 'GET',
+        headers,
+        cache: 'no-store',
+      },
+    );
 
-//     return await handleResponse(response);
-//   } catch (error) {
-//     return {
-//       success: false,
-//       message: 'Failed to fetch current user',
-//       error: error instanceof Error ? error.message : 'Network error',
-//     };
-//   }
-// }
+    return await handleResponse(response);
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to fetch profile',
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
 
 export async function getUsersByRole(role: UserRole): Promise<ApiResponse<User[]>> {
   try {

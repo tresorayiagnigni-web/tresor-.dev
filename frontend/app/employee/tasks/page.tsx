@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { EmployeeLayout } from '@/app/layout/employeeLayout';
 import {
   Plus,
@@ -24,7 +24,7 @@ import {
   type TaskStatus,
   type TaskPriority,
 } from '@/lib/actions/taskActions';
-import { getUserById, type User } from '@/lib/actions/userActions';
+import { getUserById, type User,getProfile } from '@/lib/actions/userActions';
 
 // ========== TYPE DEFINITIONS ==========
 type FilterType = 'all' | 'pending' | 'completed';
@@ -49,36 +49,70 @@ const EmployeeTasksPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // ===== LOAD DATA =====
-  const loadData = async () => {
-    setIsLoading(true);
-    setError(null);
+ const loadData = useCallback(async () => {
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      // Fetch user data
-      const userResult = await getUserById(employeeId);
-      if (userResult.success && userResult.data) {
-        setUser(userResult.data);
-      }
+  try {
+    // Récupérer le profil de l'utilisateur connecté
+    const userResult = await getProfile();
 
-      // Fetch tasks assigned to this employee
-      const taskResult = await getTasks();
-
-      console.log('Résultat getTasks :', taskResult);
-
-      if (taskResult.success && taskResult.data) {
-        const userTasks = taskResult.data.filter(t => t.userId === employeeId);
-        setTasks(userTasks);
-      }
-    } catch (err) {
-      setError('Failed to load tasks');
+    if (!userResult.success || !userResult.data) {
+      throw new Error(
+        userResult.message || 'Impossible de récupérer votre profil.',
+      );
     }
 
-    setIsLoading(false);
-  };
+    // Selon la réponse actuelle du backend, le profil peut être
+    // directement dans data ou dans data.data.
+    const profileResponse = userResult.data as User & {
+      data?: User;
+    };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+    const currentUser = profileResponse.data ?? profileResponse;
+
+    if (currentUser.id == null) {
+      throw new Error(
+        "L'identifiant de l'utilisateur connecté est absent du profil.",
+      );
+    }
+
+    setUser(currentUser);
+
+    // Charger les tâches. Le backend doit identifier l'employé
+    // grâce au JWT et retourner uniquement ses tâches.
+    const taskResult = await getTasks();
+
+    console.log('Profil connecté :', currentUser);
+    console.log('Tâches récupérées :', taskResult);
+
+    if (!taskResult.success) {
+      throw new Error(
+        taskResult.message || 'Impossible de récupérer vos tâches.',
+      );
+    }
+
+    if (!Array.isArray(taskResult.data)) {
+      throw new Error(
+        'Le backend a retourné une liste de tâches invalide.',
+      );
+    }
+
+    setTasks(taskResult.data);
+  } catch (err) {
+    console.error('Erreur de chargement :', err);
+
+    setTasks([]);
+
+    setError(
+      err instanceof Error
+        ? err.message
+        : 'Une erreur est survenue lors du chargement.',
+    );
+  } finally {
+    setIsLoading(false);
+  }
+}, []);
 
   // ===== DERIVED STATE =====
   const filteredTasks = useMemo(() => {

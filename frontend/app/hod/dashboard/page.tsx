@@ -1,420 +1,778 @@
-// app/hod/dashboard/page.tsx
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { HODLayout } from '@/app/layout/HodLayout';
 import {
-  CheckSquare,
-  Users as UsersIcon,
-  ClipboardList,
-  Calendar,
-  TrendingUp,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  AlertTriangle,
-  Plus,
-} from 'lucide-react';
-import { getTasks, type Task, type TaskStatus } from '@/lib/actions/taskActions';
-import { getUsers, type User } from '@/lib/actions/userActions';
-import { getDepartmentById, type Department } from '@/lib/actions/departmentActions';
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 
-// ========== TYPE DEFINITIONS ==========
-interface DepartmentTask {
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Users,
+} from 'lucide-react';
+
+import { HODLayout } from '@/app/layout/HodLayout';
+
+import {
+  getTasks,
+  type Task,
+} from '@/lib/actions/taskActions';
+
+import {
+  getUsers,
+  getProfile,
+  type User,
+} from '@/lib/actions/userActions';
+
+import {
+  getDepartmentById,
+  type Department,
+} from '@/lib/actions/departmentActions';
+
+// ======================================================
+// CONFIGURATION
+// ======================================================
+
+const BACKEND_URL = (
+  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
+).replace(/\/+$/, '');
+
+// ======================================================
+// TYPES
+// ======================================================
+
+type CurrentProfile = {
+  id?: number | string;
+  nom?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  departmentId?: number | string | null;
+  departementId?: number | string | null;
+  departement?: {
+    id?: number | string | null;
+    nom_departement?: string;
+  } | null;
+};
+
+type DashboardUser = User & {
+  id?: number | string;
+  nom?: string;
+  email?: string;
+  role?: string;
+  departmentId?: number | string | null;
+  departementId?: number | string | null;
+  departement?: {
+    id?: number | string | null;
+    nom_departement?: string;
+  } | null;
+};
+
+type DashboardTaskData = Task & {
+  id?: number | string;
+  title?: string;
+  status?: string;
+  userId?: number | string | null;
+  assignedTo?: number | string | null;
+  user?: {
+    id?: number | string | null;
+  } | null;
+  Date_limite?: string | Date | null;
+  date_limite?: string | Date | null;
+  dateLimite?: string | Date | null;
+  priorite?: string;
+  priority?: string;
+};
+
+type DashboardTask = {
   id: string;
   title: string;
-  assignedEmployee: string;
-  dueDate: string;
-  priority: 'low' | 'medium' | 'high';
-  progress: number;
-}
-
-interface DepartmentRequest {
-  id: string;
   employee: string;
-  type: string;
-  details: string;
-  status: 'approved' | 'pending' | 'rejected';
-  date: string;
+  dueDate: string;
+  priority: string;
+  status: string;
+};
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+function normalizeStatus(status?: string): string {
+  return (status || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\s-]+/g, '_');
 }
 
-// ========== MAIN COMPONENT ==========
-const HODDashboardPage: React.FC = () => {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [department, setDepartment] = useState<Department | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+function isCompleted(status?: string): boolean {
+  return [
+    'terminer',
+    'termine',
+    'terminee',
+    'completed',
+    'complete',
+    'done',
+    'achevee',
+    'acheve',
+  ].includes(normalizeStatus(status));
+}
+
+function isInProgress(status?: string): boolean {
+  return [
+    'en_cours',
+    'in_progress',
+    'inprogress',
+  ].includes(normalizeStatus(status));
+}
+
+function getPriority(priority?: string): string {
+  const value = (priority || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (
+    value.includes('elev') ||
+    value.includes('high') ||
+    value.includes('haute')
+  ) {
+    return 'Élevée';
+  }
+
+  if (
+    value.includes('bas') ||
+    value.includes('low') ||
+    value.includes('faible')
+  ) {
+    return 'Basse';
+  }
+
+  return 'Moyenne';
+}
+
+function formatDate(
+  date?: string | Date | null,
+): string {
+  if (!date) {
+    return 'Non définie';
+  }
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Non définie';
+  }
+
+  return parsed.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getUserDepartmentId(
+  user: DashboardUser | CurrentProfile,
+): number | null {
+  const departmentId =
+    user.departementId ??
+    user.departmentId ??
+    user.departement?.id;
+
+  if (departmentId == null || departmentId === '') {
+    return null;
+  }
+
+  const parsed = Number(departmentId);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getTaskUserId(
+  task: DashboardTaskData,
+): number | null {
+  const assignedId =
+    task.userId ??
+    task.assignedTo ??
+    task.user?.id;
+
+  if (assignedId == null || assignedId === '') {
+    return null;
+  }
+
+  const parsed = Number(assignedId);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getTaskDueDate(
+  task: DashboardTaskData,
+): string | Date | null {
+  return (
+    task.Date_limite ??
+    task.date_limite ??
+    task.dateLimite ??
+    null
+  );
+}
+
+// ======================================================
+// MAIN COMPONENT
+// ======================================================
+
+export default function HODDashboardPage() {
+  const [profile, setProfile] =
+    useState<CurrentProfile | null>(null);
+
+  const [department, setDepartment] =
+    useState<Department | null>(null);
+
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+
+  const [tasks, setTasks] = useState<DashboardTaskData[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
 
-  // HOD user info - In production, this would come from auth context
-  const hodUserId = 1; // Placeholder - should come from auth
-  const hodName = 'Dr. Sarah Taylor';
-  const hodInitials = 'ST';
-  const departmentName = 'IT Architecture';
+  // ====================================================
+  // LOAD DASHBOARD DATA
+  // ====================================================
 
-  // ===== LOAD DATA =====
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
     setError(null);
 
     try {
-      // Fetch all tasks
-      const taskResult = await getTasks();
+      // 1. Charger le profil via le même mécanisme de token que les autres
+      // pages (cookie lu côté serveur dans userActions.ts).
+      const profileResult = await getProfile();
 
-      console.log('Résultat getTasks :', taskResult);
-
-      if (taskResult.success && taskResult.data) {
-        setTasks(taskResult.data);
+      if (!profileResult.success || !profileResult.data) {
+        throw new Error(
+          profileResult.message ||
+            'Impossible de charger le profil. Reconnecte-toi.',
+        );
       }
 
-      // Fetch all users
-      const userResult = await getUsers();
-     
-      if (userResult.success && userResult.data) {
-        setUsers(userResult.data);
+      const profileData: unknown = profileResult.data;
+
+      const responseObject = profileData as {
+        user?: CurrentProfile;
+        data?: {
+          user?: CurrentProfile;
+        } & CurrentProfile;
+      } & CurrentProfile;
+
+      const currentProfile: CurrentProfile =
+        responseObject.data?.user ??
+        responseObject.user ??
+        responseObject.data ??
+        responseObject;
+
+      console.log('Profil HOD reçu :', currentProfile);
+
+      setProfile(currentProfile);
+
+      // 2. Charger les employés et les tâches.
+      const [userResult, taskResult] = await Promise.all([
+        getUsers(),
+        getTasks(),
+      ]);
+
+      if (!userResult.success || !userResult.data) {
+        throw new Error(
+          userResult.message ||
+            'Impossible de charger la liste des utilisateurs.',
+        );
       }
 
-      // Fetch HOD's department (assuming HOD has departmentId)
-      // In production, get departmentId from HOD's user record
-      const deptResult = await getDepartmentById(1); // Placeholder
-      if (deptResult.success && deptResult.data) {
-        setDepartment(deptResult.data);
+      if (!taskResult.success || !taskResult.data) {
+        throw new Error(
+          taskResult.message ||
+            'Impossible de charger les tâches.',
+        );
       }
 
-      // ========== AJOUTE LES LOGS ICI ==========
-    console.log('=== DEBUG HOD ===');
-    console.log('department chargé:', deptResult.data);          // utilise le résultat direct
-    console.log('department.id:', deptResult.data?.id);
-    console.log('users:', userResult.data);
-    console.log('departementIds des users:', userResult.data?.map(u => ({ 
-      id: u.id, 
-      nom: u.nom, 
-      departementId: u.departementId 
-    })));
-    console.log('tasks:', taskResult.data);
-    // ========================================
+      const loadedUsers =
+        userResult.data as DashboardUser[];
 
-    } catch (err) {
-      setError('Failed to load dashboard data');
+      const loadedTasks =
+        taskResult.data as DashboardTaskData[];
+
+      setUsers(loadedUsers);
+      setTasks(loadedTasks);
+
+      // 3. Récupérer le département du responsable.
+      // Le profil peut ne pas contenir departementId.
+      // On recherche donc aussi son compte dans la liste des utilisateurs.
+
+      const matchingUser = loadedUsers.find((user) => {
+        if (
+          currentProfile.id != null &&
+          user.id != null &&
+          Number(user.id) === Number(currentProfile.id)
+        ) {
+          return true;
+        }
+
+        return Boolean(
+          currentProfile.email &&
+            user.email &&
+            user.email.toLowerCase() ===
+              currentProfile.email.toLowerCase(),
+        );
+      });
+
+      const departmentId =
+        getUserDepartmentId(currentProfile) ??
+        (matchingUser
+          ? getUserDepartmentId(matchingUser)
+          : null);
+
+      if (departmentId == null) {
+        console.error(
+          'Profil du responsable :',
+          currentProfile,
+        );
+
+        console.error(
+          'Compte correspondant dans les utilisateurs :',
+          matchingUser,
+        );
+
+        throw new Error(
+          'Aucun département associé à ce responsable. Vérifie departementId dans la table users et l’association du responsable dans la table departements.',
+        );
+      }
+
+      console.log(
+        'Département du responsable :',
+        departmentId,
+      );
+
+      // 4. Charger le département correspondant.
+      const departmentResult =
+        await getDepartmentById(departmentId);
+
+      if (
+        !departmentResult.success ||
+        !departmentResult.data
+      ) {
+        throw new Error(
+          departmentResult.message ||
+            `Impossible de charger le département ${departmentId}.`,
+        );
+      }
+
+      setDepartment(departmentResult.data);
+
+      console.log(
+        'Département chargé :',
+        departmentResult.data,
+      );
+
+      console.log(
+        'Utilisateurs reçus :',
+        loadedUsers.map((user) => ({
+          id: user.id,
+          nom: user.nom,
+          departementId: user.departementId,
+          departmentId: user.departmentId,
+          departement: user.departement,
+        })),
+      );
+
+      console.log('Tâches reçues :', loadedTasks);
+    } catch (err: unknown) {
+      console.error(
+        'Erreur lors du chargement du dashboard HOD :',
+        err,
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Une erreur inattendue est survenue.',
+      );
+    } finally {
+      setLoading(false);
     }
-
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    loadData();
   }, []);
 
-  // ===== DERIVED STATE =====
-  // Get users in HOD's department
-  const departmentUsers = users.filter(user => {
-  const match = Number(user.departementId) === Number(department?.id);
-  // log pour voir
-  console.log(user.nom, user.departementId, '===', department?.id, '→', match);
-  return match;
- });
-  const totalEmployees = departmentUsers.length;
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
 
-  // Get tasks assigned to users in HOD's department
-  const departmentUserIds = departmentUsers.map(user => user.id).filter((id): id is number => id !== undefined);
+  // ====================================================
+  // DEPARTMENT DATA
+  // ====================================================
 
-  // Récupérer les tâches attribuées aux employés du département
-  const departmentTasks = tasks.filter(
-    task =>
-      task.userId !== undefined &&
-      departmentUserIds.includes(Number(task.userId))
-  );
+  // Le profil peut ne pas contenir le département :
+  // on utilise alors celui chargé depuis l'API.
+  const departmentId =
+    (department?.id != null
+      ? Number(department.id)
+      : null) ??
+    getUserDepartmentId(profile ?? {});
 
-  // Task statistics
-  const pendingTasks = departmentTasks.filter(t => t.status !== 'Terminer').length;
-  const completedTasks = departmentTasks.filter(t => t.status === 'Terminer').length;
+  // Ne conserver que les membres du département du HOD.
+  const departmentUsers = users.filter((user) => {
+    const userDepartmentId = getUserDepartmentId(user);
 
-  // Tasks due this week
-  const tasksDueThisWeek = departmentTasks.filter(task => {
-    if (!task.Date_limite) return false;
-    const dueDate = new Date(task.Date_limite);
-    const today = new Date();
-    const weekFromNow = new Date(today);
-    weekFromNow.setDate(weekFromNow.getDate() + 7);
-    return dueDate >= today && dueDate <= weekFromNow && task.status !== 'Terminer';
-  }).length;
-
-  // Map tasks to DepartmentTask format
-  const mappedTasks: DepartmentTask[] = departmentTasks.map(task => {
-    const assignedUser = users.find(u => u.id === task.userId);
-    const priorityMap: Record<string, 'low' | 'medium' | 'high'> = {
-      'Bas': 'low',
-      'Moyen': 'medium',
-      'Elevee': 'high',
-    };
-
-    // Calculate progress based on status
-    let progress = 0;
-    if (task.status === 'A_faire') progress = 0;
-    else if (task.status === 'En_cours') progress = 50;
-    else if (task.status === 'Terminer') progress = 100;
-
-    return {
-      id: task.id?.toString() || '',
-      title: task.title || '',
-      assignedEmployee: assignedUser?.nom || 'Unassigned',
-      dueDate: task.Date_limite || '',
-      priority: priorityMap[task.priorite || 'Moyen'] || 'medium',
-      progress: progress,
-    };
+    return (
+      departmentId != null &&
+      userDepartmentId != null &&
+      userDepartmentId === departmentId
+    );
   });
 
-  // Map requests (using mock data for now - this would come from a request API)
-  const departmentRequests: DepartmentRequest[] = [
-    {
-      id: '1',
-      employee: 'John Doe',
-      type: 'Leave Request',
-      details: 'Annual leave - 5 days',
-      status: 'pending',
-      date: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      employee: 'Alice Smith',
-      type: 'Expense Claim',
-      details: 'Travel reimbursement - $350',
-      status: 'approved',
-      date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-  ];
+  const departmentUserIds = new Set(
+    departmentUsers
+      .map((user) =>
+        user.id == null ? null : Number(user.id),
+      )
+      .filter(
+        (id): id is number =>
+          id !== null && Number.isFinite(id),
+      ),
+  );
 
-  // ========== HANDLERS ==========
-  const handleNewTask = () => {
-    // In production, this would open a create task modal
-    alert('New Task modal would open here');
-  };
+  // ====================================================
+  // DEPARTMENT TASKS
+  // ====================================================
 
-  // ========== HELPER FUNCTIONS ==========
-  const getPriorityBadge = (priority: DepartmentTask['priority']) => {
-    const config = {
-      high: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
-        icon: <AlertTriangle size={14} className="mr-1" />,
-        label: 'High',
-      },
-      medium: {
-        bg: 'bg-amber-100',
-        text: 'text-amber-800',
-        icon: <Clock size={14} className="mr-1" />,
-        label: 'Medium',
-      },
-      low: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
-        icon: <CheckCircle size={14} className="mr-1" />,
-        label: 'Low',
-      },
-    };
-    return config[priority];
-  };
+  const departmentTasks: DashboardTask[] = tasks
+    .filter((task) => {
+      const assignedUserId = getTaskUserId(task);
 
-  const getStatusBadge = (status: DepartmentRequest['status']) => {
-    const config = {
-      approved: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
-        icon: <CheckCircle size={14} className="mr-1" />,
-        label: 'Approved',
-      },
-      pending: {
-        bg: 'bg-yellow-100',
-        text: 'text-yellow-800',
-        icon: <Clock size={14} className="mr-1" />,
-        label: 'Pending',
-      },
-      rejected: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
-        icon: <AlertCircle size={14} className="mr-1" />,
-        label: 'Rejected',
-      },
-    };
-    return config[status];
-  };
+      return (
+        assignedUserId != null &&
+        departmentUserIds.has(assignedUserId)
+      );
+    })
+    .map((task) => {
+      const assignedUserId = getTaskUserId(task);
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'No date';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+      const assignedUser = departmentUsers.find(
+        (user) =>
+          user.id != null &&
+          Number(user.id) === assignedUserId,
+      );
+
+      const dueDate = getTaskDueDate(task);
+
+      return {
+        id: String(task.id ?? ''),
+        title: task.title || 'Tâche sans titre',
+        employee: assignedUser?.nom || 'Employé non identifié',
+        dueDate: dueDate ? String(dueDate) : '',
+        priority: getPriority(
+          task.priorite ?? task.priority,
+        ),
+        status: task.status || '',
+      };
     });
-  };
 
-  const getProgressColor = (progress: number) => {
-    if (progress === 100) return 'bg-green-500';
-    if (progress >= 70) return 'bg-blue-500';
-    if (progress >= 40) return 'bg-amber-500';
-    return 'bg-red-500';
-  };
+  // ====================================================
+  // STATISTICS
+  // ====================================================
 
-  // ===== LOADING STATE =====
-  if (isLoading) {
+  const completedTasks = departmentTasks.filter((task) =>
+    isCompleted(task.status),
+  ).length;
+
+  const pendingTasks =
+    departmentTasks.length - completedTasks;
+
+  const today = new Date();
+
+  today.setHours(0, 0, 0, 0);
+
+  const weekEnd = new Date(today);
+
+  weekEnd.setDate(weekEnd.getDate() + 7);
+
+  weekEnd.setHours(23, 59, 59, 999);
+
+  const deadlinesThisWeek = departmentTasks.filter((task) => {
+    if (!task.dueDate || isCompleted(task.status)) {
+      return false;
+    }
+
+    const dueDate = new Date(task.dueDate);
+
+    return (
+      !Number.isNaN(dueDate.getTime()) &&
+      dueDate >= today &&
+      dueDate <= weekEnd
+    );
+  }).length;
+
+  // ====================================================
+  // HEADER INFORMATION
+  // ====================================================
+
+  const hodName =
+    profile?.nom ||
+    profile?.name ||
+    'Responsable de département';
+
+  const hodInitials = hodName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  const departmentName =
+    department?.nom_departement ||
+    profile?.departement?.nom_departement ||
+    'Mon département';
+
+  // ====================================================
+  // LOADING STATE
+  // ====================================================
+
+  if (loading) {
     return (
       <HODLayout
-        pageTitle="Department Dashboard Overview"
-        pageSubtitle="Loading..."
+        pageTitle="Tableau de bord du département"
+        pageSubtitle="Chargement des données..."
         departmentName={departmentName}
         hodName={hodName}
         hodInitials={hodInitials}
         showCreateButton={false}
       >
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex min-h-[350px] items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#263A81] mx-auto mb-4"></div>
-            <p className="text-[#6B7280]">Loading dashboard...</p>
+            <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#263A81]" />
+
+            <p className="text-gray-500">
+              Chargement depuis la base de données...
+            </p>
           </div>
         </div>
       </HODLayout>
     );
   }
 
-  // ===== ERROR STATE =====
+  // ====================================================
+  // ERROR STATE
+  // ====================================================
+
   if (error) {
     return (
       <HODLayout
-        pageTitle="Department Dashboard Overview"
-        pageSubtitle="Error loading data"
+        pageTitle="Tableau de bord du département"
+        pageSubtitle="Erreur de chargement"
         departmentName={departmentName}
         hodName={hodName}
         hodInitials={hodInitials}
         showCreateButton={false}
       >
-        <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <AlertCircle size={64} className="text-red-500 opacity-50 mb-4" />
-          <h3 className="text-xl font-semibold text-[#1F2937] mb-2">Error Loading Dashboard</h3>
-          <p className="text-[#6B7280]">{error}</p>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-1 shrink-0 text-red-600" />
+
+            <div>
+              <h2 className="font-semibold text-red-800">
+                Impossible de charger le tableau de bord
+              </h2>
+
+              <p className="mt-2 text-sm text-red-700">
+                {error}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => void loadDashboard()}
+                className="mt-4 rounded-lg bg-[#263A81] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1d2e68]"
+              >
+                Réessayer
+              </button>
+            </div>
+          </div>
         </div>
       </HODLayout>
     );
   }
 
-  // ========== RENDER ==========
+  // ====================================================
+  // DASHBOARD
+  // ====================================================
+
   return (
     <HODLayout
-      pageTitle="Department Dashboard Overview"
-      pageSubtitle=""
+      pageTitle="Tableau de bord du département"
+      pageSubtitle={`Département : ${departmentName}`}
       departmentName={departmentName}
       hodName={hodName}
       hodInitials={hodInitials}
       showCreateButton={true}
-      onCreateClick={handleNewTask}
-      createButtonText="New Task"
+      onCreateClick={() => {
+        window.location.assign('/hod/tasks');
+      }}
+      createButtonText="Nouvelle tâche"
     >
-      {/* KPI Scorecards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-[#6B7280]">Total Department Employees</div>
-              <div className="text-3xl font-bold text-[#1F2937] mt-2">{totalEmployees}</div>
-            </div>
-            <div className="p-3 bg-[#263A81]/10 rounded-lg">
-              <UsersIcon size={28} className="text-[#263A81]" />
-            </div>
-          </div>
-        </div>
+      {/* STATISTIQUES */}
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-[#6B7280]">Active Tasks Array</div>
-              <div className="text-3xl font-bold text-[#1F2937] mt-2">
-                <span className="text-amber-600">{pendingTasks}</span>
-                <span className="text-[#6B7280] text-base font-normal mx-1">/</span>
-                <span className="text-green-600">{completedTasks}</span>
-              </div>
-              <div className="text-xs text-[#6B7280] mt-1">Pending / Completed</div>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <ClipboardList size={28} className="text-blue-600" />
-            </div>
-          </div>
-        </div>
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <StatCard
+          title="Employés du département"
+          value={departmentUsers.length}
+          icon={<Users size={26} />}
+          iconClass="bg-indigo-100 text-indigo-700"
+        />
 
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-medium text-[#6B7280]">Critical Deadlines</div>
-              <div className="text-3xl font-bold text-[#1F2937] mt-2">{tasksDueThisWeek}</div>
-              <div className="text-xs text-[#6B7280] mt-1">Tasks due this week</div>
-            </div>
-            <div className="p-3 bg-red-100 rounded-lg">
-              <Calendar size={28} className="text-red-600" />
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="Tâches en attente / terminées"
+          value={
+            <span>
+              <span className="text-amber-600">
+                {pendingTasks}
+              </span>
+
+              <span className="mx-2 text-gray-400">/</span>
+
+              <span className="text-green-600">
+                {completedTasks}
+              </span>
+            </span>
+          }
+          icon={<ClipboardList size={26} />}
+          iconClass="bg-blue-100 text-blue-700"
+        />
+
+        <StatCard
+          title="Échéances cette semaine"
+          value={deadlinesThisWeek}
+          icon={<CalendarDays size={26} />}
+          iconClass="bg-red-100 text-red-600"
+        />
       </div>
 
-      {/* Active Tracking Matrix Table */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm mb-8 overflow-hidden">
-        <div className="p-6 border-b border-[#E5E7EB]">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-[#1F2937]">Active Department Tasks</h2>
-              <p className="text-sm text-[#6B7280] mt-1">Tracking progress across all team members</p>
-            </div>
-          </div>
+      {/* TABLEAU DES TÂCHES */}
+
+      <section className="mb-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            Tâches du département
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Suivi des tâches assignées aux membres du département
+          </p>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[#E5E7EB] bg-gray-50/70">
-                <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Task Title</th>
-                <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Assigned Employee</th>
-                <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Due Date</th>
-                <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Priority</th>
-                <th className="text-left py-3.5 px-6 text-[#6B7280] font-semibold tracking-wide">Progress</th>
+          <table className="w-full text-left text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {[
+                  'Titre de la tâche',
+                  'Employé assigné',
+                  'Date limite',
+                  'Priorité',
+                  'État',
+                ].map((heading) => (
+                  <th
+                    key={heading}
+                    className="whitespace-nowrap px-6 py-4 font-semibold text-gray-600"
+                  >
+                    {heading}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#E5E7EB]">
-              {mappedTasks.length === 0 ? (
+
+            <tbody className="divide-y divide-gray-100">
+              {departmentTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-[#6B7280]">
-                    <div className="flex flex-col items-center gap-2">
-                      <ClipboardList size={48} className="text-[#6B7280] opacity-30" />
-                      <p className="font-medium">No tasks found</p>
-                      <p className="text-sm">No active tasks in your department</p>
-                    </div>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-12 text-center"
+                  >
+                    <ClipboardList
+                      size={42}
+                      className="mx-auto mb-3 text-gray-300"
+                    />
+
+                    <p className="font-medium text-gray-700">
+                      Aucune tâche trouvée
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-500">
+                      Aucune tâche assignée aux employés de ce département.
+                    </p>
                   </td>
                 </tr>
               ) : (
-                mappedTasks.map((task) => {
-                  const priorityConfig = getPriorityBadge(task.priority);
-                  const progressColor = getProgressColor(task.progress);
+                departmentTasks.map((task) => {
+                  const completed = isCompleted(task.status);
+
+                  const inProgress = isInProgress(task.status);
+
                   return (
-                    <tr key={task.id} className="hover:bg-gray-50/50 transition duration-150">
-                      <td className="py-3.5 px-6 text-[#1F2937] font-medium">{task.title}</td>
-                      <td className="py-3.5 px-6 text-[#6B7280]">{task.assignedEmployee}</td>
-                      <td className="py-3.5 px-6 text-[#6B7280]">{formatDate(task.dueDate)}</td>
-                      <td className="py-3.5 px-6">
+                    <tr
+                      key={task.id}
+                      className="transition-colors hover:bg-gray-50"
+                    >
+                      <td className="px-6 py-4 font-medium text-gray-900">
+                        {task.title}
+                      </td>
+
+                      <td className="px-6 py-4 text-gray-600">
+                        {task.employee}
+                      </td>
+
+                      <td className="whitespace-nowrap px-6 py-4 text-gray-600">
+                        {formatDate(task.dueDate)}
+                      </td>
+
+                      <td className="px-6 py-4">
                         <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${priorityConfig.bg} ${priorityConfig.text}`}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                            task.priority === 'Élevée'
+                              ? 'bg-red-100 text-red-700'
+                              : task.priority === 'Basse'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-amber-100 text-amber-700'
+                          }`}
                         >
-                          {priorityConfig.icon}
-                          {priorityConfig.label}
+                          {task.priority}
                         </span>
                       </td>
-                      <td className="py-3.5 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden min-w-[60px]">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
-                              style={{ width: `${task.progress}%` }}
-                            />
-                          </div>
-                          <span className="text-xs font-medium text-[#1F2937] min-w-[36px]">
-                            {task.progress}%
-                          </span>
-                        </div>
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                            completed
+                              ? 'bg-green-100 text-green-700'
+                              : inProgress
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {completed ? (
+                            <CheckCircle2 size={14} />
+                          ) : (
+                            <Clock3 size={14} />
+                          )}
+
+                          {completed
+                            ? 'Terminée'
+                            : inProgress
+                              ? 'En cours'
+                              : 'À faire'}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -423,55 +781,57 @@ const HODDashboardPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
 
-      {/* Quick Action Request Log */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm">
-        <div className="p-6 border-b border-[#E5E7EB]">
-          <div className="flex items-center gap-3">
-            <TrendingUp size={20} className="text-[#263A81]" />
-            <h2 className="text-xl font-bold text-[#1F2937]">Recent Department Requests</h2>
-          </div>
-          <p className="text-sm text-[#6B7280] mt-1">Pending approvals and recent activity</p>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {departmentRequests.length === 0 ? (
-              <div className="col-span-full text-center py-8 text-[#6B7280]">
-                <p>No pending requests</p>
-              </div>
-            ) : (
-              departmentRequests.map((request) => {
-                const statusConfig = getStatusBadge(request.status);
-                return (
-                  <div
-                    key={request.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#FEFEFC] border border-[#E5E7EB] rounded-lg hover:border-[#263A81]/20 transition-colors gap-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-[#1F2937]">{request.employee}</span>
-                        <span className="text-[#6B7280] text-sm">-</span>
-                        <span className="text-sm text-[#6B7280]">{request.type}</span>
-                      </div>
-                      <div className="text-sm text-[#6B7280] truncate mt-0.5">{request.details}</div>
-                      <div className="text-xs text-[#6B7280] mt-1">{formatDate(request.date)}</div>
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide whitespace-nowrap ${statusConfig.bg} ${statusConfig.text}`}
-                    >
-                      {statusConfig.icon}
-                      {statusConfig.label}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
+      {/* RÉSUMÉ */}
+
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-gray-900">
+          Résumé du département
+        </h2>
+
+        <p className="mt-2 text-sm text-gray-600">
+          {departmentUsers.length} employé(s),{' '}
+          {departmentTasks.length} tâche(s), dont{' '}
+          {completedTasks} terminée(s).
+        </p>
+      </section>
     </HODLayout>
   );
-};
+}
 
-export default HODDashboardPage;
+// ======================================================
+// STATISTIC CARD
+// ======================================================
+
+function StatCard({
+  title,
+  value,
+  icon,
+  iconClass,
+}: {
+  title: string;
+  value: ReactNode;
+  icon: ReactNode;
+  iconClass: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-500">
+            {title}
+          </p>
+
+          <div className="mt-2 text-3xl font-bold text-gray-900">
+            {value}
+          </div>
+        </div>
+
+        <div className={`rounded-lg p-3 ${iconClass}`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}

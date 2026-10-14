@@ -136,32 +136,76 @@ export async function getDepartments(): Promise<ApiResponse<Department[]>> {
   }
 }
 
-export async function getDepartmentById(departmentId: number): Promise<ApiResponse<Department>> {
+
+export async function getDepartmentById(
+  departmentId: number,
+): Promise<ApiResponse<Department>> {
   try {
+    if (!Number.isInteger(departmentId) || departmentId <= 0) {
+      return {
+        success: false,
+        message: `Identifiant de département invalide : ${departmentId}`,
+      };
+    }
+
     const headers = await getHeaders();
-    
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/departments/${departmentId}`, {
+
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+    if (!backendUrl) {
+      throw new Error('NEXT_PUBLIC_BACKEND_URL n’est pas configurée.');
+    }
+
+    const url = `${backendUrl.replace(/\/$/, '')}/departments/${departmentId}`;
+
+    const response = await fetch(url, {
       method: 'GET',
       headers,
       cache: 'no-store',
     });
 
-    const result = await handleResponse(response);
-    
-    if (result.success && result.data) {
-      result.data = normalizeDepartment(result.data);
+    if (!response.ok) {
+      const errorBody = await response.text();
+
+      console.error('Erreur API département :', {
+        url,
+        status: response.status,
+        response: errorBody,
+      });
+
+      return {
+        success: false,
+        message: `Échec du chargement du département (HTTP ${response.status}).`,
+        error: errorBody,
+      };
     }
-    
+
+    const result = await handleResponse(response);
+
+    if (!result.success || !result.data) {
+      console.error('Réponse département invalide :', result);
+
+      return {
+        success: false,
+        message: result.message || 'Le département est absent de la réponse.',
+        error: result.error,
+      };
+    }
+
+    result.data = normalizeDepartment(result.data);
+
     return result;
   } catch (error) {
-    console.error(`Error fetching department ${departmentId}:`, error);
+    console.error(`Erreur lors du chargement du département ${departmentId} :`, error);
+
     return {
       success: false,
-      message: 'Failed to fetch department',
-      error: error instanceof Error ? error.message : 'Network error',
+      message: 'Impossible de charger le département.',
+      error: error instanceof Error ? error.message : 'Erreur réseau inconnue.',
     };
   }
 }
+
 
 export async function createDepartment(input: CreateDepartmentInput): Promise<ApiResponse<Department>> {
   try {
