@@ -4,6 +4,7 @@ import { Task } from '../../tasks/entities/task.entity';
 import { Departments } from '../../departement/entities/departement.entity';
 import { Token } from '../../auth/entities/token.entity';
 import { BaseEntity } from 'src/auth/entities/baseEntity';
+import { UserProvider } from './user-provider.entity';
 
 
 @Entity('users')
@@ -33,6 +34,11 @@ export class User extends BaseEntity {
   @Column()
   telephone?: string;
 
+  @OneToMany(() => UserProvider, (p) => p.user)
+  providers?: UserProvider[];
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  picture?: string;
 
   @Column({ default: true })
   status?: boolean;

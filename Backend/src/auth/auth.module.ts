@@ -13,6 +13,8 @@ import { RolesGuard } from './guards/roles.guard';
 import { Token } from './entities/token.entity';
 import { TokenService } from './token.service';
 import { TokenModule } from './token.module';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { AppleStrategy } from './strategies/apple.strategy';
 
 
 @Module({
@@ -33,7 +35,7 @@ import { TokenModule } from './token.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokenService, JwtStrategy, RolesGuard],
+  providers: [AuthService, GoogleStrategy, AppleStrategy, TokenService, JwtStrategy, RolesGuard],
   exports: [AuthService, PassportModule, JwtStrategy, RolesGuard ],   // Pour pouvoir l'utiliser dans d'autres modules
 })
 export class AuthModule {}

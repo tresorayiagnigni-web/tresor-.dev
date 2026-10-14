@@ -1,57 +1,129 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
-import { UpdateUserDto } from './dto/update.user.dto';
+// src/users/users.service.ts
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+
 import { User } from './entities/user.entity';
-import { UpdateStatusDto } from './dto/update-status.dto';
+import { UserProvider } from './entities/user-provider.entity';
 import { Departments } from 'src/departement/entities/departement.entity';
+import { Project } from 'src/project/entities/project.entity';
+import { UpdateUserDto } from './dto/update.user.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Role } from './enums/role.enum';
-import { Project } from 'src/project/entities/project.entity';
-import { CreateProjectDto } from 'src/project/dto/create-project.dto';
-
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+
+    @InjectRepository(UserProvider)
+    private readonly userProviderRepository: Repository<UserProvider>,
+
     @InjectRepository(Departments)
-    private departmentRepository: Repository<Departments>,
-    @InjectRepository(Project)                     // ← ajoute cette ligne
+    private readonly departmentRepository: Repository<Departments>,
+
+    @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
   ) {}
-  
+
+  // ====================== OAUTH METHODS ======================
+
+  async findByProvider(
+    provider: string,
+    providerId: string,
+  ): Promise<User | null> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .innerJoinAndSelect('user.providers', 'provider')
+      .where('provider.provider = :provider', { provider })
+      .andWhere('provider.providerId = :providerId', { providerId })
+      .getOne();
+  }
+
+  async createOAuthUser(data: {
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    picture?: string;
+    providers: { provider: string; providerId: string }[];
+  }): Promise<User> {
+    // On mappe firstName + lastName → nom (selon ton modèle)
+    const nom =
+      [data.firstName, data.lastName].filter(Boolean).join(' ') || undefined;
+
+    const user = this.userRepository.create({
+      email: data.email ?? undefined,
+      nom: nom,
+      picture: data.picture ?? undefined,
+      role: Role.EMPLOYEE, // ou Role.USER selon ton enum
+      providers: data.providers.map((p) =>
+        this.userProviderRepository.create({
+          provider: p.provider,
+          providerId: p.providerId,
+        }),
+      ),
+    });
+
+    return this.userRepository.save(user);
+  }
+
+  async linkProvider(
+    userId: number, // ← ton id est number
+    data: { provider: string; providerId: string },
+  ): Promise<void> {
+    const existing = await this.userProviderRepository.findOne({
+      where: {
+        provider: data.provider,
+        providerId: data.providerId,
+      },
+    });
+
+    if (!existing) {
+      await this.userProviderRepository.save({
+        userId,
+        provider: data.provider,
+        providerId: data.providerId,
+      });
+    }
+  }
+
+  // ====================== MÉTHODES EXISTANTES ======================
+
   async count(): Promise<number> {
     return this.userRepository.count();
   }
 
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({
-      where: { 
-        email 
-      },
+      where: { email },
       select: {
         id: true,
         email: true,
-        password: true,     // ← obligatoire
+        password: true,
         role: true,
         nom: true,
-        departement: true,
+        departementId: true,
         telephone: true,
         status: true,
         cree_le: true,
-      } 
+      },
     });
   }
 
   async findById(id: number): Promise<User> {
     const user = await this.userRepository
-    .createQueryBuilder('user')
-    .where('user.id = :id', { id })
-    .addSelect('user.password')   // ← force le chargement du password
-    .getOne();
+      .createQueryBuilder('user')
+      .where('user.id = :id', { id })
+      .addSelect('user.password')
+      .getOne();
 
     if (!user) {
       throw new NotFoundException('Utilisateur introuvable');
@@ -59,8 +131,13 @@ export class UsersService {
 
     return user;
   }
-   
-  async createAdmin(dto: { email: string, password: string, nom: string, telephone: string}): Promise<User> {
+
+  async createAdmin(dto: {
+    email: string;
+    password: string;
+    nom: string;
+    telephone: string;
+  }): Promise<User> {
     const existing = await this.findByEmail(dto.email);
     if (existing) {
       throw new ConflictException('Cet email est déjà utilisé');
@@ -69,11 +146,11 @@ export class UsersService {
     const hashed = await bcrypt.hash(dto.password, 12);
 
     const user = this.userRepository.create({
-      email: dto.email!,
+      email: dto.email,
       password: hashed,
       role: Role.ADMIN,
-      nom: dto.nom!,
-      telephone: dto.telephone!,
+      nom: dto.nom,
+      telephone: dto.telephone,
     });
 
     return this.userRepository.save(user);
@@ -81,16 +158,16 @@ export class UsersService {
 
   async createUser(dto: CreateUserDto): Promise<User> {
     const { email, password, nom, telephone, departementId } = dto;
-    
+
     const existing = await this.findByEmail(dto.email!);
     if (existing) {
       throw new ConflictException('Cet email est déjà utilisé');
     }
 
-    //  Département obligatoire pour un EMPLOYEE
-
     if (!departementId) {
-      throw new BadRequestException('Le département est obligatoire pour un employé');
+      throw new BadRequestException(
+        'Le département est obligatoire pour un employé',
+      );
     }
 
     const departement = await this.departmentRepository.findOne({
@@ -100,6 +177,7 @@ export class UsersService {
     if (!departement) {
       throw new NotFoundException('Département non trouvé');
     }
+
     const hashedPassword = await bcrypt.hash(dto.password!, 12);
 
     const user = this.userRepository.create({
@@ -114,12 +192,8 @@ export class UsersService {
     const savedUser = await this.userRepository.save(user);
 
     const result = await this.userRepository.findOne({
-      where: {
-        id: savedUser.id 
-      },
-      relations: {
-        departement: true,
-      },
+      where: { id: savedUser.id },
+      relations: { departement: true },
     });
 
     if (!result) {
@@ -128,27 +202,19 @@ export class UsersService {
 
     const { password: _, ...userWithoutPassword } = result;
     return userWithoutPassword as User;
- }
+  }
 
   async save(user: User): Promise<User> {
     return this.userRepository.save(user);
   }
 
-
-  //Lire tous les donnees
-
   async findEmployees(user: User) {
-    // ADMIN : tous les employés
     if (user.role === Role.ADMIN) {
       return this.userRepository.find({
-        where: {
-          role: Role.EMPLOYEE,
-        },
+        where: { role: Role.EMPLOYEE },
         relations: { departement: true },
       });
     }
-
-    // HOD : seulement les employés de son département
 
     if (user.role === Role.HOD) {
       if (!user.departement) {
@@ -158,13 +224,9 @@ export class UsersService {
       return this.userRepository.find({
         where: {
           role: Role.EMPLOYEE,
-          departement: {
-            id: user.departement.id
-          },
+          departement: { id: user.departement.id },
         },
-        relations: { 
-          departement: true 
-        },
+        relations: { departement: true },
       });
     }
 
@@ -188,36 +250,24 @@ export class UsersService {
     }));
   }
 
-  //Lire un utilisateur par son ID
-
-  async findOne(id:number){
-
+  async findOne(id: number) {
     return this.userRepository.findOne({
-      where:{id},
+      where: { id },
     });
   }
 
-  //Modifier un utilisateur
-
   async update(id: number, updateUserDto: UpdateUserDto) {
-
     const user = await this.userRepository.findOne({
       where: { id },
     });
 
     if (!user) {
-      throw new NotFoundException(
-        `Utilisateur avec l'ID ${id} introuvable`,
-      );
+      throw new NotFoundException(`Utilisateur avec l'ID ${id} introuvable`);
     }
-
-    // Vérifier l'email
 
     if (updateUserDto.email && updateUserDto.email !== user.email) {
       const existingUser = await this.userRepository.findOne({
-        where: {
-          email: updateUserDto.email,
-        },
+        where: { email: updateUserDto.email },
       });
 
       if (existingUser && existingUser.id !== id) {
@@ -226,15 +276,10 @@ export class UsersService {
         );
       }
     }
-  
-    // Modifier le département
 
     if (updateUserDto.departementId !== undefined) {
-
       const department = await this.departmentRepository.findOne({
-        where: {
-          id: updateUserDto.departementId,
-        },
+        where: { id: updateUserDto.departementId },
       });
 
       if (!department) {
@@ -245,24 +290,13 @@ export class UsersService {
       user.departement = department;
     }
 
-    // Ne pas modifier le password
-
-    const {
-      password,
-      departementId,
-      ...dataToUpdate
-    } = updateUserDto as UpdateUserDto & {
-      password?: string;
-    };
-
-    // Modifier les autres champs
+    const { password, departementId, ...dataToUpdate } =
+      updateUserDto as UpdateUserDto & { password?: string };
 
     Object.assign(user, dataToUpdate);
 
     return await this.userRepository.save(user);
   }
-
-  // Supprimer un utilisateur par son ID
 
   async remove(id: number): Promise<{ message: string }> {
     const user = await this.userRepository.findOne({ where: { id } });
@@ -282,27 +316,23 @@ export class UsersService {
       throw new NotFoundException(`Utilisateur avec l'ID ${id} non trouvé`);
     }
 
-    // Empêcher de désactiver son propre compte
-   // if (user.id === currentUserId) { ... }
-
     user.status = dto.status;
     const updatedUser = await this.userRepository.save(user);
+
     return {
       message: `Utilisateur ${dto.status ? 'activé' : 'désactivé'} avec succès`,
       user: {
         id: updatedUser.id,
         email: updatedUser.email,
-        // status: updatedUser.status
-        status: Boolean(user.status)
-      }
+        status: Boolean(user.status),
+      },
     };
   }
 
   async findUsersInMyDepartment(currentUserId: number): Promise<User[]> {
-    // 1. Récupérer l'utilisateur connecté avec son département
     const currentUser = await this.userRepository.findOne({
       where: { id: currentUserId },
-      select: {id: true, departementId: true},
+      select: { id: true, departementId: true },
     });
 
     if (!currentUser) {
@@ -310,17 +340,13 @@ export class UsersService {
     }
 
     if (!currentUser.departementId) {
-      return []; // Pas de département → liste vide
+      return [];
     }
 
-    // 2. Récupérer tous les utilisateurs du même département
-    const users = await this.userRepository.find({
+    return this.userRepository.find({
       where: { departementId: currentUser.departementId },
-      select: {id: true, nom: true, email: true}, // On ne renvoie que le nécessaire
+      select: { id: true, nom: true, email: true },
       order: { nom: 'ASC' },
     });
-
-    return users;
   }
-
 }

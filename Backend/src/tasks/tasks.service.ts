@@ -82,19 +82,93 @@ export class TasksService {
   );
 }
 
-  async findAll(filterDto: FilterTaskDto = {}, userId: number): Promise<Task[]> {
+  // async findAll(filterDto: FilterTaskDto = {}, userId: number): Promise<Task[]> {
+  //   const { status, priorite, search } = filterDto;
+
+  //   const query = this.taskRepository
+  //     .createQueryBuilder('task')
+  //     .where('task.userId = :userId', { userId });   // Correction principale
+
+  //   if (status) {
+  //     query.andWhere('task.status = :status', { status });
+  //   }
+
+  //   if (priorite) {
+  //     query.andWhere('task.priority = :priorite', { priorite }); // corrigé le nom
+  //   }
+
+  //   if (search) {
+  //     query.andWhere(
+  //       '(task.title LIKE :search OR task.description LIKE :search)',
+  //       { search: `%${search}%` },
+  //     );
+  //   }
+
+  //   return query.getMany();
+  // }
+
+    async findAll(
+    filterDto: FilterTaskDto = {},
+    userId: number,
+  ): Promise<Task[]> {
     const { status, priorite, search } = filterDto;
+
+    // Récupérer l'utilisateur connecté avec son département
+    const currentUser = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: {
+        departement: true,
+      },
+    });
+
+    if (!currentUser) {
+      throw new NotFoundException('Utilisateur connecté introuvable');
+    }
 
     const query = this.taskRepository
       .createQueryBuilder('task')
-      .where('task.userId = :userId', { userId });   // Correction principale
+      .leftJoinAndSelect('task.user', 'employee');
+
+    // ADMIN : toutes les tâches
+    if (currentUser.role === Role.ADMIN) {
+      // Aucun filtre supplémentaire
+    }
+
+    // HOD : tâches des employés de son département
+    else if (currentUser.role === Role.HOD) {
+      if (!currentUser.departement) {
+        throw new BadRequestException(
+          "Le HOD n'a pas de département assigné",
+        );
+      }
+
+      query
+        .innerJoin('employee.departement', 'department')
+        .andWhere('department.id = :departmentId', {
+          departmentId: currentUser.departement.id,
+        })
+        .andWhere('employee.role = :employeeRole', {
+          employeeRole: Role.EMPLOYEE,
+        });
+    }
+
+    // EMPLOYEE : uniquement ses tâches
+    else if (currentUser.role === Role.EMPLOYEE) {
+      query.andWhere('employee.id = :userId', { userId });
+    }
+
+    else {
+      throw new ForbiddenException(
+        "Vous n'êtes pas autorisé à consulter les tâches",
+      );
+    }
 
     if (status) {
       query.andWhere('task.status = :status', { status });
     }
 
     if (priorite) {
-      query.andWhere('task.priority = :priorite', { priorite }); // corrigé le nom
+      query.andWhere('task.priorite = :priorite', { priorite });
     }
 
     if (search) {

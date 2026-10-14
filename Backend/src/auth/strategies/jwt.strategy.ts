@@ -24,24 +24,36 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
-    console.log('===== JWT Payload =====', payload);
+  console.log('===== JWT Payload =====', payload);
+  console.log('Type de payload.sub :', typeof payload.sub);
 
-    const user = await this.userRepository.findOne({
-      where: { id: payload.sub },
-      relations: { departement: true }, // attention à l'orthographe
-    });
+  const user = await this.userRepository.findOne({
+    where: { id: Number(payload.sub) },
+    relations: { departement: true },
+  });
 
-    console.log('===== User trouvé =====', user);
+  console.log('===== User trouvé =====', user);
+  console.log('Status de l\'utilisateur :', user?.status);
 
-    if (!user) {
-      throw new UnauthorizedException('Utilisateur inexistant');
-    }
-
-    if (!user.status) {
-      throw new UnauthorizedException('Compte inactif');
-    }
-
-    // Ce que tu retournes ici devient req.user
-    return user;
+  if (!user) {
+    throw new UnauthorizedException('Utilisateur inexistant');
   }
+
+  // status est un boolean
+  if (user.status === false) {
+    throw new UnauthorizedException('Compte inactif');
+  }
+
+  // Ce que tu retournes devient req.user
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    nom: user.nom,
+    telephone: user.telephone,
+    status: user.status,
+    departementId: user.departementId ?? user.departement?.id ?? null,
+    departement: user.departement,
+  };
+}
 }
