@@ -307,63 +307,6 @@ const DepartmentsPage: React.FC = () => {
   }
 };
 
-//   const handleEditDepartment = async (e: React.FormEvent) => {
-//     e.preventDefault();
-
-//      console.log('🔥 SUBMIT EDIT DEPARTMENT');
-
-//     if (!selectedDepartment) return;
-//     setIsSubmitting(true);
-//     setError(null);
-
-//     console.log('🔥 AVANT UPDATE');
-//   console.log('selectedDepartment:', selectedDepartment);
-//   console.log('editFormData:', editFormData);
-
-
-//     console.log('========== UPDATE DEPARTMENT ==========');
-//     console.log('ID département :', selectedDepartment.id);
-//     console.log('Formulaire :', editFormData);
-//     console.log(
-//   'Chef sélectionné :',
-//   editFormData.chef_DepartementId
-// );
-// console.log(
-//   'Type chef :',
-//   typeof editFormData.chef_DepartementId
-// );
-
-//     const result = await updateExistingDepartment(selectedDepartment.id!, {
-//       nom_departement: editFormData.nom_departement,
-//       description: editFormData.description,
-//       chef_DepartementId: editFormData.chef_DepartementId === '' ? undefined :  Number(editFormData.chef_DepartementId),
-//     });
-
-//      console.log('🔥 APRÈS UPDATE');
-//   console.log('result:', result);
-
-//     if (result.success && result.data) {
-//       const currentHODId = selectedDepartment.chef_DepartementId;
-//       const newHODId = editFormData.chef_DepartementId ? parseInt(editFormData.chef_DepartementId) : null;
-
-//       if (newHODId !== currentHODId) {
-//         if (newHODId) {
-//           const assignResult = await assignHOD(selectedDepartment.id!, newHODId);
-//           if (assignResult.success) {
-//             showSuccess(setSuccessMessage, `Department updated with new HOD assigned!`);
-//           }
-//         }
-//       } else {
-//         showSuccess(setSuccessMessage, `Department ${result.data.nom_departement} updated successfully!`);
-//       }
-//       closeEditModal();
-//       loadData();
-//     } else {
-//       setError(result.message || 'Failed to update department');
-//     }
-//     setIsSubmitting(false);
-//   };
-
   const handleDeleteDepartment = async () => {
     if (!departmentToDelete) return;
     setIsSubmitting(true);

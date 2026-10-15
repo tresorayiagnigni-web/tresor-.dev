@@ -124,7 +124,7 @@ export const HODLayout: React.FC<HODLayoutProps> = ({
             <div className="flex items-center gap-2">
               <Briefcase size={24} className="text-[#263A81] md:hidden" />
               <span className="text-xl font-bold text-[#263A81] hidden md:inline">
-                MENDO <br />company
+                MENDO
               </span>
             </div>
           </div>

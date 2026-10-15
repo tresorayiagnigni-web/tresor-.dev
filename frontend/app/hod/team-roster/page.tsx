@@ -69,12 +69,6 @@ const HODTeamRosterPage: React.FC = () => {
   const [employeeToRemove, setEmployeeToRemove] = useState<Employee | null>(null);
   const [confirmationInput, setConfirmationInput] = useState<string>('');
 
-  // // HOD user info - In production, this would come from auth context
-  // const hodUserId = 1; // Placeholder - should come from auth
-  // const departmentId = 1; // Placeholder - should come from auth
-  // const hodName = 'Dr. Sarah Taylor';
-  // const hodInitials = 'ST';
-  // const departmentName = 'IT Architecture';
 
   // ========== LOAD DATA ==========
   const loadData = async () => {

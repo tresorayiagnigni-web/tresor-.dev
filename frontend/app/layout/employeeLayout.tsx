@@ -116,7 +116,7 @@ export const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({
           <div className="absolute left-0 top-0 h-full w-[280px] bg-[#263A81] text-white p-6 shadow-xl animate-slide-in">
             <div className="flex justify-between items-center mb-8">
               <div>
-                <div className="text-2xl font-bold tracking-tight">MENDO <br />company</div>
+                <div className="text-2xl font-bold tracking-tight">MENDO </div>
                 <div className="text-xs font-light opacity-70 mt-1">
                   Employee Workspace
                 </div>
@@ -174,7 +174,7 @@ export const EmployeeLayout: React.FC<EmployeeLayoutProps> = ({
             <div className="flex items-center gap-2">
               <Briefcase size={24} className="text-[#263A81] md:hidden" />
               <span className="text-xl font-bold text-[#263A81] hidden md:inline">
-                MENDO <br />company
+                MENDO
               </span>
             </div>
           </div>
