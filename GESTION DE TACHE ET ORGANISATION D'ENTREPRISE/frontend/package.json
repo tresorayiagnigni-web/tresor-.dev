@@ -3,13 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@babel/preset-typescript": "^8.0.1",
     "lucide-react": "^1.23.0",
     "next": "16.2.9",
     "react": "19.2.4",
@@ -24,8 +23,5 @@
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "^16.2.10"
   }
 }

@@ -8,7 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-
+import { DataSource } from 'typeorm';
 import { User } from './entities/user.entity';
 import { UserProvider } from './entities/user-provider.entity';
 import { Departments } from 'src/departement/entities/departement.entity';
@@ -23,6 +23,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly dataSource: DataSource,
 
     @InjectRepository(UserProvider)
     private readonly userProviderRepository: Repository<UserProvider>,
@@ -298,17 +299,38 @@ export class UsersService {
     return await this.userRepository.save(user);
   }
 
+  // async remove(id: number): Promise<{ message: string }> {
+  //   const user = await this.userRepository.findOne({ where: { id } });
+
+  //   if (!user) {
+  //     throw new NotFoundException('Utilisateur introuvable');
+  //   }
+
+  //   await this.userRepository.remove(user);
+
+  //   return { message: 'Utilisateur supprimé avec succès' };
+  // }
+
   async remove(id: number): Promise<{ message: string }> {
-    const user = await this.userRepository.findOne({ where: { id } });
+  const user = await this.userRepository.findOne({ where: { id } });
 
-    if (!user) {
-      throw new NotFoundException('Utilisateur introuvable');
-    }
-
-    await this.userRepository.remove(user);
-
-    return { message: 'Utilisateur supprimé avec succès' };
+  if (!user) {
+    throw new NotFoundException('Utilisateur introuvable');
   }
+
+ await this.dataSource.transaction(async (manager) => {
+  await manager
+    .createQueryBuilder()
+    .update(Departments) // le nom exact de la classe exportée dans departement.entity.ts
+    .set({ chef_departement: null })
+    .where('chefDepartementId = :id', { id })
+    .execute();
+
+  await manager.remove(user);
+});
+
+  return { message: 'Utilisateur supprimé avec succès' };
+}
 
   async updateStatus(id: number, dto: UpdateStatusDto) {
     const user = await this.userRepository.findOne({ where: { id } });

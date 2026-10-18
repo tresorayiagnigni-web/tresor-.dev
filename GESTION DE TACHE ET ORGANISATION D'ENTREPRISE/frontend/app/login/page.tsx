@@ -236,6 +236,7 @@ const LoginPageV2: React.FC = () => {
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    console.log('submit handler OK');
 
     const formData = new FormData(e.currentTarget);
     formData.set('rememberDevice', String(rememberDevice));
@@ -280,7 +281,7 @@ const LoginPageV2: React.FC = () => {
               Sign in to access your HR dashboard.
             </p>
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} method="POST" >
               {state && !state.success && (
                 <div
                   role="alert"

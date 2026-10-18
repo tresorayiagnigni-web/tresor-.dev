@@ -21,6 +21,9 @@ export class Project {
   @Column({ nullable: true })
   description?: string;
 
+  @Column({ type: 'date', nullable: true })
+  dueDate?: string;
+
   // Le projet est assigné à un Département (pas à un employé)
   // @ManyToOne(() => Departments, { eager: true })
   // department?: Departments;
@@ -49,4 +52,8 @@ export class Project {
   )
   @JoinColumn({ name: 'departementId' })
   departement?: Departments;
+
+  // @Column({ nullable: true })
+  // departementId?: number;
+
 }

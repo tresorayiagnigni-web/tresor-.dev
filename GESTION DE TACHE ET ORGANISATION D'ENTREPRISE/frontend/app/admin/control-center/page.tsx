@@ -1,5 +1,6 @@
 'use client';
 
+import ProjectsAndTasks from "./ProjectsAndTasks";
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/app/layout/AppLayout';
 import {
@@ -468,161 +469,202 @@ const AdminControlCenterPage = () => {
             </StatCard>
           </div>
 
-          {/* ===== USER REGISTRY (BOARD BY ROLE) ===== */}
-          <section>
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-extrabold text-[#16193A]">User Registry</h2>
-                <span className={`text-xs font-bold text-[#6B73A8] bg-white px-3 py-1 rounded-full ${cardShadow}`}>
-                  {filteredUsers.length} users
-                </span>
-              </div>
+         <ProjectsAndTasks
+            users={users.map((u) => ({
+            id: String(u.id),
+            name: u.nom,
+            email: u.email,
+            role: u.role ?? "EMPLOYEE",
+            departmentId:
+              u.departementId != null
+              ? String(u.departementId)
+            : "",
+            }))}
+            departments={departments.map((d) => ({
+              id: String(d.id),
+              name: d.nom_departement,
+           }))}
+          />
 
-              <div className="flex flex-col sm:flex-row gap-3">
-                {/* Search */}
-                <div className="relative">
-                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B73A8]" />
-                  <input
-                    type="text"
-                    placeholder="Search users..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className={`w-full sm:w-60 h-11 pl-11 pr-4 rounded-full bg-white text-sm font-semibold text-[#16193A] placeholder:text-[#6B73A8] focus:outline-none focus:ring-2 focus:ring-[#263A81] transition ${cardShadow}`}
-                  />
-                </div>
-                {/* Role Filter */}
-                <select
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="all">All Roles</option>
-                  <option value="ADMIN">Admin</option>
-                  <option value="HOD">HOD</option>
-                  <option value="EMPLOYEE">Employee</option>
-                </select>
-                {/* Status Filter */}
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="all">All Status</option>
-                  <option value="true">Active</option>
-                  <option value="false">Suspended</option>
-                  <option value="pending">Pending</option>
-                </select>
-              </div>
+          {/* ===== USER REGISTRY (GRILLE HORIZONTALE PAR RÔLE) ===== */}
+<section>
+  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+    <div className="flex items-center gap-3">
+      <h2 className="text-2xl font-extrabold text-[#16193A]">User Registry</h2>
+      <span
+        className={`text-xs font-bold text-[#6B73A8] bg-white px-3 py-1 rounded-full ${cardShadow}`}
+      >
+        {filteredUsers.length} users
+      </span>
+    </div>
+
+    <div className="flex flex-col sm:flex-row gap-3">
+      <div className="relative">
+        <Search
+          size={18}
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B73A8]"
+        />
+        <input
+          type="text"
+          placeholder="Search users..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className={`w-full sm:w-60 h-11 pl-11 pr-4 rounded-full bg-white text-sm font-semibold text-[#16193A] placeholder:text-[#6B73A8] focus:outline-none focus:ring-2 focus:ring-[#263A81] transition ${cardShadow}`}
+        />
+      </div>
+      <select
+        value={selectedRole}
+        onChange={(e) => setSelectedRole(e.target.value)}
+        className={selectCls}
+      >
+        <option value="all">All Roles</option>
+        <option value="ADMIN">Admin</option>
+        <option value="HOD">HOD</option>
+        <option value="EMPLOYEE">Employee</option>
+      </select>
+      <select
+        value={selectedStatus}
+        onChange={(e) => setSelectedStatus(e.target.value)}
+        className={selectCls}
+      >
+        <option value="all">All Status</option>
+        <option value="true">Active</option>
+        <option value="false">Suspended</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="space-y-8">
+    {visibleColumns.map((col) => {
+      const colUsers = filteredUsers.filter(
+        (u) => (u.role || 'EMPLOYEE') === col.key,
+      );
+      const roleConfig = getRoleBadge(col.key);
+
+      return (
+        <div key={col.key}>
+          {/* Header de section */}
+          <div
+            className={`mb-3 flex items-center justify-between rounded-2xl bg-white px-4 py-3 ${cardShadow}`}
+          >
+            <span className="flex items-center gap-2 text-sm font-bold text-[#16193A]">
+              {col.label}
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${roleConfig.cls}`}
+              >
+                {colUsers.length}
+              </span>
+            </span>
+            {col.key === 'EMPLOYEE' && (
+              <button
+                onClick={openCreateModal}
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-[#263A81]/10 text-[#263A81] transition hover:bg-[#263A81] hover:text-white"
+                title="Create user"
+                aria-label="Create user"
+              >
+                <UserPlus size={14} />
+              </button>
+            )}
+          </div>
+
+          {colUsers.length === 0 ? (
+            <div className="rounded-3xl border-2 border-dashed border-[#E6E9F6] py-6 text-center text-sm text-[#6B73A8]">
+              No users
             </div>
-
-            <div className={`grid grid-cols-1 ${boardCols} gap-4 items-start`}>
-              {visibleColumns.map((col) => {
-                const colUsers = filteredUsers.filter((u) => (u.role || 'EMPLOYEE') === col.key);
-                const roleConfig = getRoleBadge(col.key);
+          ) : (
+            /* Grille horizontale comme Projets & Tâches */
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {colUsers.map((user) => {
+                const userStatus = getUserStatus(user);
+                const statusConfig = getStatusBadge(userStatus);
 
                 return (
-                  <div key={col.key} className="min-w-0">
-                    {/* Column header */}
-                    <div className={`flex items-center justify-between bg-white rounded-2xl px-4 py-3 mb-3 ${cardShadow}`}>
-                      <span className="flex items-center gap-2 font-bold text-[#16193A] text-sm">
-                        {col.label}
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${roleConfig.cls}`}>
-                          {colUsers.length}
-                        </span>
+                  <div
+                    key={user.id}
+                    className={`rounded-3xl bg-white p-4 ${cardShadow}`}
+                  >
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      <span className="inline-flex items-center rounded-full bg-[#263A81]/10 px-3 py-1 text-xs font-bold text-[#263A81]">
+                        <Building size={12} className="mr-1" />
+                        Dept: {getDeptLabel(user)}
                       </span>
-                      {col.key === 'EMPLOYEE' && (
-                        <button
-                          onClick={openCreateModal}
-                          className="w-7 h-7 rounded-full bg-[#263A81]/10 text-[#263A81] flex items-center justify-center hover:bg-[#263A81] hover:text-white transition"
-                          title="Create user"
-                          aria-label="Create user"
-                        >
-                          <UserPlus size={14} />
-                        </button>
-                      )}
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${statusConfig.cls}`}
+                      >
+                        {statusConfig.icon}
+                        {statusConfig.label}
+                      </span>
                     </div>
 
-                    {/* Cards */}
-                    {colUsers.length === 0 ? (
-                      <div className="text-center text-sm text-[#6B73A8] py-6 border-2 border-dashed border-[#E6E9F6] rounded-3xl">
-                        No users
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#4A5CC2] to-[#263A81] text-sm font-extrabold text-white">
+                        {getInitials(user.nom)}
                       </div>
-                    ) : (
-                      colUsers.map((user) => {
-                        const userStatus = getUserStatus(user);
-                        const statusConfig = getStatusBadge(userStatus);
-                        return (
-                          <div
-                            key={user.id}
-                            className={`bg-white rounded-3xl p-4 mb-3 ${cardShadow}`}
-                          >
-                            <div className="flex flex-wrap gap-1.5 mb-3">
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-[#263A81]/10 text-[#263A81]">
-                                <Building size={12} className="mr-1" />
-                                Dept: {getDeptLabel(user)}
-                              </span>
-                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${statusConfig.cls}`}>
-                                {statusConfig.icon}
-                                {statusConfig.label}
-                              </span>
-                            </div>
+                      <div className="min-w-0">
+                        <div className="truncate text-base font-extrabold text-[#16193A]">
+                          {user.nom || 'Unknown'}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-[#6B73A8]">
+                          <Mail size={12} className="flex-shrink-0" />
+                          <span className="truncate">
+                            {user.email || 'No email'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
-                            <div className="flex items-center gap-3">
-                              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#4A5CC2] to-[#263A81] text-white flex items-center justify-center font-extrabold text-sm flex-shrink-0">
-                                {getInitials(user.nom)}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="text-[#16193A] font-extrabold text-base truncate">
-                                  {user.nom || 'Unknown'}
-                                </div>
-                                <div className="text-xs text-[#6B73A8] flex items-center gap-1">
-                                  <Mail size={12} className="flex-shrink-0" />
-                                  <span className="truncate">{user.email || 'No email'}</span>
-                                </div>
-                              </div>
-                            </div>
+                    <div className="my-3 h-1 overflow-hidden rounded-full bg-[#E6E9F6]">
+                      <div className="h-full w-full bg-gradient-to-r from-[#263A81] to-[#4A5CC2]" />
+                    </div>
 
-                            <div className="h-1 rounded-full bg-[#E6E9F6] my-3 overflow-hidden">
-                              <div className="h-full w-full bg-gradient-to-r from-[#263A81] to-[#4A5CC2]" />
-                            </div>
-
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-[#6B73A8]">
-                                Joined: {formatDate(user.createdAt)}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => openEditModal(user)}
-                                  className="w-8 h-8 rounded-full bg-[#F4F5FB] text-[#263A81] flex items-center justify-center hover:bg-[#263A81] hover:text-white transition"
-                                  title="Edit user"
-                                >
-                                  <Edit size={15} />
-                                </button>
-                                <button
-                                  onClick={() => handleToggleStatus(user.id!, userStatus)}
-                                  className="w-8 h-8 rounded-full bg-[#F4F5FB] text-[#263A81] flex items-center justify-center hover:bg-[#263A81] hover:text-white transition"
-                                  title={userStatus === 'true' ? 'Suspend user' : 'Activate user'}
-                                >
-                                  {userStatus === 'true' ? <UserX size={15} /> : <UserCheck size={15} />}
-                                </button>
-                                <button
-                                  onClick={() => openDeleteModal(user)}
-                                  className="w-8 h-8 rounded-full bg-[#F4F5FB] text-[#263A81] flex items-center justify-center hover:bg-[#263A81] hover:text-white transition"
-                                  title="Delete user"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#6B73A8]">
+                        Joined: {formatDate(user.createdAt)}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEditModal(user)}
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F5FB] text-[#263A81] transition hover:bg-[#263A81] hover:text-white"
+                          title="Edit user"
+                        >
+                          <Edit size={15} />
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleToggleStatus(user.id!, userStatus)
+                          }
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F5FB] text-[#263A81] transition hover:bg-[#263A81] hover:text-white"
+                          title={
+                            userStatus === 'true'
+                              ? 'Suspend user'
+                              : 'Activate user'
+                          }
+                        >
+                          {userStatus === 'true' ? (
+                            <UserX size={15} />
+                          ) : (
+                            <UserCheck size={15} />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => openDeleteModal(user)}
+                          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F4F5FB] text-[#263A81] transition hover:bg-[#263A81] hover:text-white"
+                          title="Delete user"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
             </div>
-          </section>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</section>
 
           {/* ===== DEPARTMENT INSPECTOR ===== */}
           <section className="mt-10">

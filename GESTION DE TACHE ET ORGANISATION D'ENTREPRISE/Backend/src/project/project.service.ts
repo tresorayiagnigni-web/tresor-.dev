@@ -1,3 +1,4 @@
+
 import {
   Injectable,
   NotFoundException,
@@ -5,46 +6,164 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+
 import { Project } from './entities/project.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 import { User } from '../users/entities/user.entity';
 import { Departments } from '../departement/entities/departement.entity';
-import { Role } from '../auth/enums/role.enum'; // adapte le chemin
+import { Role } from '../auth/enums/role.enum';
 
 @Injectable()
 export class ProjectsService {
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
+
     @InjectRepository(Departments)
     private readonly departmentRepository: Repository<Departments>,
   ) {}
 
-  async create(createProjectDto: CreateProjectDto, currentUser: User) {
-    // Seul un ADMIN peut créer un projet
-    if (currentUser.role !== Role.ADMIN) {
-      throw new ForbiddenException('Seul un ADMIN peut créer un projet');
+  private checkAdmin(currentUser: User): void {
+    if (currentUser?.role !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Seul un administrateur peut gérer les projets.',
+      );
     }
+  }
 
-    const { name, description, departementId } = createProjectDto;
+  async create(
+    dto: CreateProjectDto,
+    currentUser: User,
+  ): Promise<Project> {
+    this.checkAdmin(currentUser);
 
-    // Trouver le département par son ID
     const department = await this.departmentRepository.findOne({
-      where: { id: departementId },
+      where: { id: dto.departementId },
     });
 
     if (!department) {
-      throw new NotFoundException(`Département avec l'ID ${departementId} introuvable`);
+      throw new NotFoundException(
+        `Département ${dto.departementId} introuvable.`,
+      );
     }
 
     const project = this.projectRepository.create({
-      name,
-      description,
+      name: dto.name,
+      description: dto.description,
       departement: department,
       createdBy: currentUser,
+      dueDate: dto.dueDate,
     });
 
     return this.projectRepository.save(project);
   }
 
+  async findAll(currentUser: User): Promise<Project[]> {
+    this.checkAdmin(currentUser);
+
+    return this.projectRepository.find({
+      relations: {
+        departement: true,
+        createdBy: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
+  async findOne(
+    id: number,
+    currentUser: User,
+  ): Promise<Project> {
+    this.checkAdmin(currentUser);
+
+    const project = await this.projectRepository.findOne({
+      where: { id },
+      relations: {
+        departement: true,
+        createdBy: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        `Projet ${id} introuvable.`,
+      );
+    }
+
+    return project;
+  }
+
+  async update(
+    id: number,
+    dto: UpdateProjectDto,
+    currentUser: User,
+  ): Promise<Project> {
+    this.checkAdmin(currentUser);
+
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        `Projet ${id} introuvable.`,
+      );
+    }
+
+    if (dto.name !== undefined) {
+      project.name = dto.name;
+    }
+
+    if (dto.description !== undefined) {
+      project.description = dto.description;
+    }
+
+    if (dto.dueDate !== undefined) {
+      project.dueDate = dto.dueDate;
+    }
+
+    if (dto.departementId !== undefined) {
+      const department = await this.departmentRepository.findOne({
+        where: { id: dto.departementId },
+      });
+
+      if (!department) {
+        throw new NotFoundException(
+          `Département ${dto.departementId} introuvable.`,
+        );
+      }
+
+      project.departement = department;
+    }
+
+    await this.projectRepository.save(project);
+
+    return this.findOne(id, currentUser);
+  }
+
+  async remove(
+    id: number,
+    currentUser: User,
+  ): Promise<{ message: string }> {
+    this.checkAdmin(currentUser);
+
+    const project = await this.projectRepository.findOne({
+      where: { id },
+    });
+
+    if (!project) {
+      throw new NotFoundException(
+        `Projet ${id} introuvable.`,
+      );
+    }
+
+    await this.projectRepository.remove(project);
+
+    return {
+      message: `Le projet ${id} a été supprimé.`,
+    };
+  }
 }
