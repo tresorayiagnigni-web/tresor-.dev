@@ -3,6 +3,11 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import type { Priority, WorkStatus } from "@/lib/actions/projectActions";
+// Vérifiez le fichier d’export (ex. ui/colors.ts, ui/theme.ts, etc.)
+// et remplacez par le nom exact existant, par exemple :
+
+// Mapping des statuts → colonnes + couleurs (adapté à ton STATUS_META)
+
 
 // --- Classes réutilisables (identiques au style de votre dashboard) ----
 export const BTN_PRIMARY =

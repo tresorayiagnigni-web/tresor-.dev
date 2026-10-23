@@ -37,7 +37,11 @@ function toUiTask(
     id: String(task.id ?? ''),
     title: task.title,
     description: task.description ?? '',
-    projectId: projectId || null,
+    // projectId: projectId || null,
+    projectId:
+    projectId !== null && projectId !== ""
+    ? Number(projectId)
+    : undefined,
     assigneeIds,
     priority,
     dueDate: dueDate || task.Date_limite || null,

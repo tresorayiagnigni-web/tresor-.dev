@@ -3,12 +3,14 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,          // ← ajoute
   CreateDateColumn,
   UpdateDateColumn,
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
-import { Departments } from '../../departement/entities/departement.entity'; // adapte le chemin
+import { Departments } from '../../departement/entities/departement.entity';
+import { Task } from '../../tasks/entities/task.entity'; // ← adapte le chemin
 
 @Entity('projects')
 export class Project {
@@ -24,17 +26,9 @@ export class Project {
   @Column({ type: 'date', nullable: true })
   dueDate?: string;
 
-  // Le projet est assigné à un Département (pas à un employé)
-  // @ManyToOne(() => Departments, { eager: true })
-  // department?: Departments;
-
-  @ManyToOne(() => User, { onDelete: 'CASCADE' }) // ou 'SET NULL'
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'createdById' })
   createdBy?: User;
-  
-  // Qui a créé le projet (ADMIN)
-  // @ManyToOne(() => User, { eager: true })
-  // createdBy?: User;
 
   @CreateDateColumn()
   createdAt?: Date;
@@ -47,13 +41,13 @@ export class Project {
     (departement) => departement.projets,
     {
       nullable: false,
-      onDelete: 'CASCADE', // ou 'CASCADE' selon ton besoin
+      onDelete: 'CASCADE',
     },
   )
   @JoinColumn({ name: 'departementId' })
   departement?: Departments;
 
-  // @Column({ nullable: true })
-  // departementId?: number;
-
+  // ← NOUVELLE RELATION
+  @OneToMany(() => Task, (task) => task.project)
+  tasks?: Task[];
 }

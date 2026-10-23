@@ -1,8 +1,17 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from "typeorm";
+import { 
+  Entity, 
+  PrimaryGeneratedColumn, 
+  Column, 
+  CreateDateColumn, 
+  UpdateDateColumn, 
+  ManyToOne, 
+  JoinColumn 
+} from "typeorm";
 import { User } from '../../users/entities/user.entity';
 import { TaskStatus } from '../enums/task-status.enum';
 import { TaskPriority } from '../enums/task-priority.enum';
 import { BaseEntity } from "src/auth/entities/baseEntity";
+import { Project } from "src/project/entities/project.entity"; // ← adapte le chemin
 
 @Entity('tasks')
 export class Task extends BaseEntity {
@@ -19,7 +28,6 @@ export class Task extends BaseEntity {
         default: TaskStatus.A_faire
     })
     status?: TaskStatus;
-
 
     @Column({
         type: 'enum',
@@ -42,4 +50,15 @@ export class Task extends BaseEntity {
 
     @Column({ nullable: true })
     Date_limite?: Date;
+
+    // ← NOUVELLE RELATION
+    @Column({ nullable: true }) // mets false si tu veux que le projet soit obligatoire
+    projectId?: number;
+
+    @ManyToOne(() => Project, (project) => project.tasks, {
+      nullable: true,
+      onDelete: 'SET NULL',
+    })
+    @JoinColumn({ name: 'projectId' })
+    project?: Project;
 }

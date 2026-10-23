@@ -43,11 +43,13 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  projectId?: string | null;
+  // projectId?: string | null;
   assigneeIds: string[];
   priority: Priority;
   dueDate?: string | null;
   status: WorkStatus;
+  projectId?: number;          // ← nouveau
+  project?: Project;
 }
 
 export type NewProject = Omit<Project, 'id' | 'status' | 'createdAt' | 'updatedAt' | 'departement'>;
@@ -407,5 +409,40 @@ export async function deleteTask(
     success: true,
     data: null,
     message: result.message || 'Tâche supprimée avec succès.',
+  };
+}
+
+export async function listMyDepartmentProjects(): Promise<ApiResponse<Project[]>> {
+  const result = await request<Project[] | { items: Project[] }>(
+    '/projects/my-department',
+    { method: 'GET' },
+  );
+
+  if (!result.success) {
+    return {
+      success: false,
+      message: result.message,
+      error: result.error,
+    };
+  }
+
+  const value = result.data;
+  const projects = Array.isArray(value)
+    ? value
+    : value && Array.isArray(value.items)
+      ? value.items
+      : null;
+
+  if (!projects) {
+    return {
+      success: false,
+      message: 'Liste de projets invalide.',
+    };
+  }
+
+  return {
+    success: true,
+    data: projects,
+    message: result.message,
   };
 }

@@ -34,17 +34,10 @@ import {
   type Department,
 } from '@/lib/actions/departmentActions';
 
-// ======================================================
-// CONFIGURATION
-// ======================================================
-
-const BACKEND_URL = (
-  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001'
-).replace(/\/+$/, '');
-
-// ======================================================
-// TYPES
-// ======================================================
+import {
+  listMyDepartmentProjects,
+  type Project,
+} from '@/lib/actions/projectActions';
 
 type CurrentProfile = {
   id?: number | string;
@@ -54,7 +47,13 @@ type CurrentProfile = {
   role?: string;
   departmentId?: number | string | null;
   departementId?: number | string | null;
+
   departement?: {
+    id?: number | string | null;
+    nom_departement?: string;
+  } | null;
+
+  department?: {
     id?: number | string | null;
     nom_departement?: string;
   } | null;
@@ -158,18 +157,11 @@ function getPriority(priority?: string): string {
   return 'Moyenne';
 }
 
-function formatDate(
-  date?: string | Date | null,
-): string {
-  if (!date) {
-    return 'Non définie';
-  }
+function formatDate(date?: string | Date | null): string {
+  if (!date) return 'Non définie';
 
   const parsed = new Date(date);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return 'Non définie';
-  }
+  if (Number.isNaN(parsed.getTime())) return 'Non définie';
 
   return parsed.toLocaleDateString('fr-FR', {
     day: '2-digit',
@@ -184,6 +176,7 @@ function getUserDepartmentId(
   const departmentId =
     user.departementId ??
     user.departmentId ??
+    user.departement?.id ??
     user.departement?.id;
 
   if (departmentId == null || departmentId === '') {
@@ -192,29 +185,23 @@ function getUserDepartmentId(
 
   const parsed = Number(departmentId);
 
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isInteger(parsed) && parsed > 0
+    ? parsed
+    : null;
 }
 
-function getTaskUserId(
-  task: DashboardTaskData,
-): number | null {
+function getTaskUserId(task: DashboardTaskData): number | null {
   const assignedId =
-    task.userId ??
-    task.assignedTo ??
-    task.user?.id;
+    task.userId ?? task.assignedTo ?? task.user?.id;
 
-  if (assignedId == null || assignedId === '') {
-    return null;
-  }
+  if (assignedId == null) return null;
 
   const parsed = Number(assignedId);
 
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function getTaskDueDate(
-  task: DashboardTaskData,
-): string | Date | null {
+function getTaskDueDate(task: DashboardTaskData): string | Date | null {
   return (
     task.Date_limite ??
     task.date_limite ??
@@ -228,18 +215,13 @@ function getTaskDueDate(
 // ======================================================
 
 export default function HODDashboardPage() {
-  const [profile, setProfile] =
-    useState<CurrentProfile | null>(null);
-
-  const [department, setDepartment] =
-    useState<Department | null>(null);
-
+  const [profile, setProfile] = useState<CurrentProfile | null>(null);
+  const [department, setDepartment] = useState<Department | null>(null);
   const [users, setUsers] = useState<DashboardUser[]>([]);
-
   const [tasks, setTasks] = useState<DashboardTaskData[]>([]);
-
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [loading, setLoading] = useState(true);
-
   const [error, setError] = useState<string | null>(null);
 
   // ====================================================
@@ -251,8 +233,7 @@ export default function HODDashboardPage() {
     setError(null);
 
     try {
-      // 1. Charger le profil via le même mécanisme de token que les autres
-      // pages (cookie lu côté serveur dans userActions.ts).
+      // 1. Récupérer le profil connecté
       const profileResult = await getProfile();
 
       if (!profileResult.success || !profileResult.data) {
@@ -262,26 +243,20 @@ export default function HODDashboardPage() {
         );
       }
 
-      const profileData: unknown = profileResult.data;
-
-      const responseObject = profileData as {
-        user?: CurrentProfile;
-        data?: {
-          user?: CurrentProfile;
-        } & CurrentProfile;
-      } & CurrentProfile;
+      const profileData = profileResult.data as any;
 
       const currentProfile: CurrentProfile =
-        responseObject.data?.user ??
-        responseObject.user ??
-        responseObject.data ??
-        responseObject;
+        profileData.data?.user ??
+        profileData.user ??
+        profileData.data ??
+        profileData;
 
-      console.log('Profil HOD reçu :', currentProfile);
+      console.log('=== PROFIL HOD ===');
+      console.log('Profil reçu :', currentProfile);
 
       setProfile(currentProfile);
 
-      // 2. Charger les employés et les tâches.
+      // 2. Charger les utilisateurs et les tâches
       const [userResult, taskResult] = await Promise.all([
         getUsers(),
         getTasks(),
@@ -290,7 +265,7 @@ export default function HODDashboardPage() {
       if (!userResult.success || !userResult.data) {
         throw new Error(
           userResult.message ||
-            'Impossible de charger la liste des utilisateurs.',
+            'Impossible de charger les utilisateurs.',
         );
       }
 
@@ -301,19 +276,13 @@ export default function HODDashboardPage() {
         );
       }
 
-      const loadedUsers =
-        userResult.data as DashboardUser[];
-
-      const loadedTasks =
-        taskResult.data as DashboardTaskData[];
+      const loadedUsers = userResult.data as DashboardUser[];
+      const loadedTasks = taskResult.data as DashboardTaskData[];
 
       setUsers(loadedUsers);
       setTasks(loadedTasks);
 
-      // 3. Récupérer le département du responsable.
-      // Le profil peut ne pas contenir departementId.
-      // On recherche donc aussi son compte dans la liste des utilisateurs.
-
+      // 3. Retrouver le compte HOD dans la liste des utilisateurs
       const matchingUser = loadedUsers.find((user) => {
         if (
           currentProfile.id != null &&
@@ -331,36 +300,46 @@ export default function HODDashboardPage() {
         );
       });
 
-      const departmentId =
+      // 4. Déterminer le département depuis le profil,
+      // puis utiliser le compte trouvé si nécessaire.
+      const resolvedDepartmentId =
         getUserDepartmentId(currentProfile) ??
         (matchingUser
           ? getUserDepartmentId(matchingUser)
           : null);
 
-      if (departmentId == null) {
-        console.error(
-          'Profil du responsable :',
-          currentProfile,
-        );
+      console.log(
+        'Identifiant département du profil :',
+        getUserDepartmentId(currentProfile),
+      );
 
-        console.error(
-          'Compte correspondant dans les utilisateurs :',
-          matchingUser,
-        );
+      console.log(
+        'Identifiant département du compte utilisateur :',
+        matchingUser
+          ? getUserDepartmentId(matchingUser)
+          : null,
+      );
 
+      console.log(
+        'Identifiant département retenu :',
+        resolvedDepartmentId,
+      );
+
+      if (
+        resolvedDepartmentId == null ||
+        !Number.isInteger(resolvedDepartmentId) ||
+        resolvedDepartmentId <= 0
+      ) {
         throw new Error(
-          'Aucun département associé à ce responsable. Vérifie departementId dans la table users et l’association du responsable dans la table departements.',
+          'Le département de ce responsable est introuvable. ' +
+            'Vérifie que son compte HOD est associé à un département ' +
+            'et que getProfile() renvoie departementId ou departement.id.',
         );
       }
 
-      console.log(
-        'Département du responsable :',
-        departmentId,
-      );
-
-      // 4. Charger le département correspondant.
+      // 5. Charger le département avec un identifiant valide
       const departmentResult =
-        await getDepartmentById(departmentId);
+        await getDepartmentById(resolvedDepartmentId);
 
       if (
         !departmentResult.success ||
@@ -368,35 +347,40 @@ export default function HODDashboardPage() {
       ) {
         throw new Error(
           departmentResult.message ||
-            `Impossible de charger le département ${departmentId}.`,
+            `Impossible de charger le département ${resolvedDepartmentId}.`,
         );
       }
 
       setDepartment(departmentResult.data);
 
-      console.log(
-        'Département chargé :',
-        departmentResult.data,
-      );
+      try {
+        const projectsResult = await listMyDepartmentProjects();
 
-      console.log(
-        'Utilisateurs reçus :',
-        loadedUsers.map((user) => ({
-          id: user.id,
-          nom: user.nom,
-          departementId: user.departementId,
-          departmentId: user.departmentId,
-          departement: user.departement,
-        })),
-      );
+        if (
+          projectsResult.success && Array.isArray(
+          projectsResult.data)
+        ) {
+          setProjects(projectsResult.data);
 
-      console.log('Tâches reçues :', loadedTasks);
+          console.log('=== PROJETS RÉCUPÉRÉS ===');
+          console.table(projectsResult.data);
+        } else {
+          setProjects([]);
+
+          console.warn(
+            'Chargement des projets refusé ou échoué :',
+            projectsResult.message,
+          );
+        }
+      } catch (projectError) {
+        setProjects([]);
+
+        console.error(
+          'Erreur lors du chargement des projets :',
+          projectError,
+        );
+      }
     } catch (err: unknown) {
-      console.error(
-        'Erreur lors du chargement du dashboard HOD :',
-        err,
-      );
-
       setError(
         err instanceof Error
           ? err.message
@@ -415,18 +399,12 @@ export default function HODDashboardPage() {
   // DEPARTMENT DATA
   // ====================================================
 
-  // Le profil peut ne pas contenir le département :
-  // on utilise alors celui chargé depuis l'API.
   const departmentId =
-    (department?.id != null
-      ? Number(department.id)
-      : null) ??
+    (department?.id != null ? Number(department.id) : null) ??
     getUserDepartmentId(profile ?? {});
 
-  // Ne conserver que les membres du département du HOD.
   const departmentUsers = users.filter((user) => {
     const userDepartmentId = getUserDepartmentId(user);
-
     return (
       departmentId != null &&
       userDepartmentId != null &&
@@ -436,14 +414,23 @@ export default function HODDashboardPage() {
 
   const departmentUserIds = new Set(
     departmentUsers
-      .map((user) =>
-        user.id == null ? null : Number(user.id),
-      )
-      .filter(
-        (id): id is number =>
-          id !== null && Number.isFinite(id),
-      ),
+      .map((user) => (user.id == null ? null : Number(user.id)))
+      .filter((id): id is number => id !== null && Number.isFinite(id)),
   );
+
+  // ====================================================
+  // DEPARTMENT PROJECTS
+  // ====================================================
+
+  const departmentProjects = projects.filter((project) => {
+    const projectDeptId =
+      (project as any).departement?.id ??
+      (project as any).departementId ??
+      (project as any).departmentId;
+
+    if (projectDeptId == null || departmentId == null) return false;
+    return Number(projectDeptId) === Number(departmentId);
+  });
 
   // ====================================================
   // DEPARTMENT TASKS
@@ -452,21 +439,13 @@ export default function HODDashboardPage() {
   const departmentTasks: DashboardTask[] = tasks
     .filter((task) => {
       const assignedUserId = getTaskUserId(task);
-
-      return (
-        assignedUserId != null &&
-        departmentUserIds.has(assignedUserId)
-      );
+      return assignedUserId != null && departmentUserIds.has(assignedUserId);
     })
     .map((task) => {
       const assignedUserId = getTaskUserId(task);
-
       const assignedUser = departmentUsers.find(
-        (user) =>
-          user.id != null &&
-          Number(user.id) === assignedUserId,
+        (user) => user.id != null && Number(user.id) === assignedUserId,
       );
-
       const dueDate = getTaskDueDate(task);
 
       return {
@@ -474,9 +453,7 @@ export default function HODDashboardPage() {
         title: task.title || 'Tâche sans titre',
         employee: assignedUser?.nom || 'Employé non identifié',
         dueDate: dueDate ? String(dueDate) : '',
-        priority: getPriority(
-          task.priorite ?? task.priority,
-        ),
+        priority: getPriority(task.priorite ?? task.priority),
         status: task.status || '',
       };
     });
@@ -489,26 +466,18 @@ export default function HODDashboardPage() {
     isCompleted(task.status),
   ).length;
 
-  const pendingTasks =
-    departmentTasks.length - completedTasks;
+  const pendingTasks = departmentTasks.length - completedTasks;
 
   const today = new Date();
-
   today.setHours(0, 0, 0, 0);
 
   const weekEnd = new Date(today);
-
   weekEnd.setDate(weekEnd.getDate() + 7);
-
   weekEnd.setHours(23, 59, 59, 999);
 
   const deadlinesThisWeek = departmentTasks.filter((task) => {
-    if (!task.dueDate || isCompleted(task.status)) {
-      return false;
-    }
-
+    if (!task.dueDate || isCompleted(task.status)) return false;
     const dueDate = new Date(task.dueDate);
-
     return (
       !Number.isNaN(dueDate.getTime()) &&
       dueDate >= today &&
@@ -521,9 +490,7 @@ export default function HODDashboardPage() {
   // ====================================================
 
   const hodName =
-    profile?.nom ||
-    profile?.name ||
-    'Responsable de département';
+    profile?.nom || profile?.name || 'Responsable de département';
 
   const hodInitials = hodName
     .trim()
@@ -538,7 +505,7 @@ export default function HODDashboardPage() {
     'Mon département';
 
   // ====================================================
-  // LOADING STATE
+  // LOADING / ERROR
   // ====================================================
 
   if (loading) {
@@ -554,19 +521,12 @@ export default function HODDashboardPage() {
         <div className="flex min-h-[350px] items-center justify-center">
           <div className="text-center">
             <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-[#263A81]" />
-
-            <p className="text-gray-500">
-              Chargement depuis la base de données...
-            </p>
+            <p className="text-gray-500">Chargement depuis la base de données...</p>
           </div>
         </div>
       </HODLayout>
     );
   }
-
-  // ====================================================
-  // ERROR STATE
-  // ====================================================
 
   if (error) {
     return (
@@ -581,16 +541,11 @@ export default function HODDashboardPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 p-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="mt-1 shrink-0 text-red-600" />
-
             <div>
               <h2 className="font-semibold text-red-800">
                 Impossible de charger le tableau de bord
               </h2>
-
-              <p className="mt-2 text-sm text-red-700">
-                {error}
-              </p>
-
+              <p className="mt-2 text-sm text-red-700">{error}</p>
               <button
                 type="button"
                 onClick={() => void loadDashboard()}
@@ -623,7 +578,6 @@ export default function HODDashboardPage() {
       createButtonText="Nouvelle tâche"
     >
       {/* STATISTIQUES */}
-
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           title="Employés du département"
@@ -636,15 +590,9 @@ export default function HODDashboardPage() {
           title="Tâches en attente / terminées"
           value={
             <span>
-              <span className="text-amber-600">
-                {pendingTasks}
-              </span>
-
+              <span className="text-amber-600">{pendingTasks}</span>
               <span className="mx-2 text-gray-400">/</span>
-
-              <span className="text-green-600">
-                {completedTasks}
-              </span>
+              <span className="text-green-600">{completedTasks}</span>
             </span>
           }
           icon={<ClipboardList size={26} />}
@@ -659,14 +607,79 @@ export default function HODDashboardPage() {
         />
       </div>
 
-      {/* TABLEAU DES TÂCHES */}
+      {/* ===================== PROJETS DU DÉPARTEMENT ===================== */}
+      <section className="mb-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-200 p-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            Projets du département
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Projets assignés à votre département par l’administrateur
+          </p>
+        </div>
 
+        <div className="p-6">
+          {departmentProjects.length === 0 ? (
+            <div className="py-10 text-center">
+              <ClipboardList size={42} className="mx-auto mb-3 text-gray-300" />
+              <p className="font-medium text-gray-700">Aucun projet assigné</p>
+              <p className="mt-1 text-sm text-gray-500">
+                L’administrateur ne vous a encore assigné aucun projet.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {departmentProjects.map((project) => {
+                const statusLabel =
+                  project.status === 'TODO'
+                    ? 'À faire'
+                    : project.status === 'IN_PROGRESS'
+                      ? 'En cours'
+                      : project.status === 'COMPLETED'
+                        ? 'Terminé'
+                        : project.status || '—';
+
+                return (
+                  <article
+                    key={project.id}
+                    className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md"
+                  >
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                        {statusLabel}
+                      </span>
+                    </div>
+
+                    <h3 className="line-clamp-2 text-[15px] font-bold text-gray-900">
+                      {project.name}
+                    </h3>
+
+                    {project.description && (
+                      <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                        {project.description}
+                      </p>
+                    )}
+
+                    <div className="mt-4 text-xs text-gray-500">
+                      Échéance :{' '}
+                      {project.dueDate
+                        ? formatDate(project.dueDate)
+                        : 'Non définie'}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* TABLEAU DES TÂCHES */}
       <section className="mb-8 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
         <div className="border-b border-gray-200 p-6">
           <h2 className="text-xl font-bold text-gray-900">
             Tâches du département
           </h2>
-
           <p className="mt-1 text-sm text-gray-500">
             Suivi des tâches assignées aux membres du département
           </p>
@@ -696,19 +709,14 @@ export default function HODDashboardPage() {
             <tbody className="divide-y divide-gray-100">
               {departmentTasks.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-12 text-center"
-                  >
+                  <td colSpan={5} className="px-6 py-12 text-center">
                     <ClipboardList
                       size={42}
                       className="mx-auto mb-3 text-gray-300"
                     />
-
                     <p className="font-medium text-gray-700">
                       Aucune tâche trouvée
                     </p>
-
                     <p className="mt-1 text-sm text-gray-500">
                       Aucune tâche assignée aux employés de ce département.
                     </p>
@@ -717,7 +725,6 @@ export default function HODDashboardPage() {
               ) : (
                 departmentTasks.map((task) => {
                   const completed = isCompleted(task.status);
-
                   const inProgress = isInProgress(task.status);
 
                   return (
@@ -728,15 +735,12 @@ export default function HODDashboardPage() {
                       <td className="px-6 py-4 font-medium text-gray-900">
                         {task.title}
                       </td>
-
                       <td className="px-6 py-4 text-gray-600">
                         {task.employee}
                       </td>
-
                       <td className="whitespace-nowrap px-6 py-4 text-gray-600">
                         {formatDate(task.dueDate)}
                       </td>
-
                       <td className="px-6 py-4">
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -750,7 +754,6 @@ export default function HODDashboardPage() {
                           {task.priority}
                         </span>
                       </td>
-
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
@@ -766,7 +769,6 @@ export default function HODDashboardPage() {
                           ) : (
                             <Clock3 size={14} />
                           )}
-
                           {completed
                             ? 'Terminée'
                             : inProgress
@@ -784,16 +786,16 @@ export default function HODDashboardPage() {
       </section>
 
       {/* RÉSUMÉ */}
-
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-bold text-gray-900">
           Résumé du département
         </h2>
-
         <p className="mt-2 text-sm text-gray-600">
-          {departmentUsers.length} employé(s),{' '}
-          {departmentTasks.length} tâche(s), dont{' '}
-          {completedTasks} terminée(s).
+          {departmentUsers.length} employé(s), {departmentTasks.length} tâche(s),
+          dont {completedTasks} terminée(s).
+          {departmentProjects.length > 0 && (
+            <> · {departmentProjects.length} projet(s) assigné(s).</>
+          )}
         </p>
       </section>
     </HODLayout>
@@ -819,18 +821,10 @@ function StatCard({
     <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-gray-500">
-            {title}
-          </p>
-
-          <div className="mt-2 text-3xl font-bold text-gray-900">
-            {value}
-          </div>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <div className="mt-2 text-3xl font-bold text-gray-900">{value}</div>
         </div>
-
-        <div className={`rounded-lg p-3 ${iconClass}`}>
-          {icon}
-        </div>
+        <div className={`rounded-lg p-3 ${iconClass}`}>{icon}</div>
       </div>
     </div>
   );

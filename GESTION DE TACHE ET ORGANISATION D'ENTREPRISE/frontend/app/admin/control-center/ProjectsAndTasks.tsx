@@ -39,6 +39,36 @@ import {
   STATUS_META,
 } from './ui';
 
+const TASK_COLUMNS = [
+  {
+    id: 'A_faire',
+    title: 'Pending',
+    headerBg: 'bg-amber-50',
+    headerText: 'text-amber-700',
+    border: 'border-l-amber-400',
+    cardBg: 'bg-gradient-to-r from-amber-50/80 to-white',
+    dot: 'bg-amber-500',
+  },
+  {
+    id: 'En_cours',
+    title: 'In Progress',
+    headerBg: 'bg-blue-50',
+    headerText: 'text-blue-700',
+    border: 'border-l-blue-500',
+    cardBg: 'bg-gradient-to-r from-blue-50/80 to-white',
+    dot: 'bg-blue-500',
+  },
+  {
+    id: 'Terminer',
+    title: 'Completed',
+    headerBg: 'bg-emerald-50',
+    headerText: 'text-emerald-700',
+    border: 'border-l-emerald-500',
+    cardBg: 'bg-gradient-to-r from-emerald-50/80 to-white',
+    dot: 'bg-emerald-500',
+  },
+] as const;
+
 interface ProjectsAndTasksProps {
   users: UserLite[];
   departments: Department[];
@@ -137,6 +167,7 @@ export default function ProjectsAndTasks({
   departments,
 }: ProjectsAndTasksProps) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -192,13 +223,16 @@ export default function ProjectsAndTasks({
     void loadData();
   }, [loadData]);
 
-  const deptName = (id: string) =>
-    departments.find((department) => department.id === id)?.name ?? '—';
+  const deptName = (id: string | number) =>
+    departments.find((department) => String(department.id) === String(id))
+      ?.name ?? '—';
 
-  const findUser = (id: string) => users.find((user) => user.id === id);
+  const findUser = (id: string | number) =>
+    users.find((user) => String(user.id) === String(id));
 
-  const getTaskCount = (projectId: string) =>
-    tasks.filter((task) => task.projectId === projectId).length;
+  // Comparaison sûre number / string
+  const getTaskCount = (projectId: string | number) =>
+    tasks.filter((task) => String(task.projectId) === String(projectId)).length;
 
   // ===== PROJETS =====
   const handleEditProject = (project: Project) => {
@@ -214,10 +248,10 @@ export default function ProjectsAndTasks({
       title: '',
       description: '',
       projectId: project.id,
-      status: 'TODO',
-      priority: 'MEDIUM',
+      status: 'A_faire',
+      priority: 'Moyen',
       assigneeIds: [],
-    });
+    } as unknown as Task);   // ← double cast
     setModal('task');
   };
 
@@ -231,7 +265,9 @@ export default function ProjectsAndTasks({
         return;
       }
       setProjects((prev) => prev.filter((p) => p.id !== project.id));
-      setTasks((prev) => prev.filter((t) => t.projectId !== project.id));
+      setTasks((prev) =>
+        prev.filter((t) => String(t.projectId) !== String(project.id)),
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -346,7 +382,7 @@ export default function ProjectsAndTasks({
       )}
 
       <div className="space-y-8">
-        {/* PROJETS */}
+        {/* ===================== PROJETS ===================== */}
         <div>
           <ColumnHeader title="Projets" count={projects.length} />
 
@@ -367,10 +403,13 @@ export default function ProjectsAndTasks({
               const departmentLabel =
                 project.departement?.nom_departement ??
                 (departmentId !== undefined
-                  ? deptName(String(departmentId))
+                  ? deptName(departmentId)
                   : '—');
 
-              const statusMeta = STATUS_META[project.status];
+              const statusMeta = project.status
+                ? STATUS_META[project.status as keyof typeof STATUS_META]
+                : undefined;
+
               const taskCount = getTaskCount(project.id);
 
               return (
@@ -425,7 +464,7 @@ export default function ProjectsAndTasks({
           </div>
         </div>
 
-        {/* TÂCHES */}
+        {/* ===================== TÂCHES (Kanban) ===================== */}
         <div>
           <ColumnHeader title="Tâches" count={tasks.length} />
 
@@ -437,80 +476,136 @@ export default function ProjectsAndTasks({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {tasks.map((task) => {
-              const statusMeta = STATUS_META[task.status];
-              const priorityMeta = PRIORITY_META[task.priority];
-              const projectName =
-                projects.find((p) => p.id === task.projectId)?.name ??
-                'Projet associé';
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            {TASK_COLUMNS.map((col) => {
+              const columnTasks = tasks.filter(
+                (t) => String(t.status) === col.id
+              );
 
               return (
-                <article
-                  key={task.id}
-                  className="rounded-2xl border border-[#e8eaf3] bg-white p-5 shadow-[0_2px_14px_rgba(38,58,129,0.07)] transition hover:shadow-[0_6px_20px_rgba(38,58,129,0.12)]"
+                <div
+                  key={col.id}
+                  className="min-h-[420px] rounded-2xl bg-slate-50/80 p-4"
                 >
-                  <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                    {statusMeta && (
-                      <DotChip dot={statusMeta.dot}>
-                        {statusMeta.label}
-                      </DotChip>
-                    )}
-                    {priorityMeta && (
-                      <DotChip dot={priorityMeta.dot}>
-                        Priorité {priorityMeta.label.toLowerCase()}
-                      </DotChip>
-                    )}
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <span className={`${AVATAR} h-11 w-11 shrink-0 text-sm`}>
-                      {initials(task.title || 'TA')}
+                  {/* Header de colonne */}
+                  <div
+                    className={`mb-4 flex items-center justify-between rounded-xl px-3 py-2.5 ${col.headerBg}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${col.dot}`}
+                      />
+                      <span
+                        className={`text-sm font-bold ${col.headerText}`}
+                      >
+                        {col.title}
+                      </span>
+                    </div>
+                    <span className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-bold text-slate-600 shadow-sm">
+                      {columnTasks.length}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="line-clamp-2 text-[15px] font-bold text-[#16193a]">
-                        {task.title}
-                      </h3>
-                      {task.projectId && (
-                        <p className="mt-0.5 truncate text-xs text-[#707ead]">
-                          {projectName}
-                        </p>
-                      )}
-                    </div>
                   </div>
 
-                  {(task.assigneeIds?.length ?? 0) > 0 && (
-                    <div className="mt-3 flex -space-x-2">
-                      {(task.assigneeIds ?? []).map((id) => {
-                        const user = findUser(id);
-                        return (
-                          <span
-                            key={id}
-                            title={
-                              user
-                                ? `${user.name} (${user.role === 'HOD' ? 'Chef' : 'Employé'})`
-                                : id
-                            }
-                            className={`${AVATAR} h-8 w-8 text-[11px] ring-2 ring-white`}
-                          >
-                            {user ? initials(user.name) : '?'}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {/* Cartes */}
+                  <div className="space-y-3">
+                    {columnTasks.map((task) => {
+                      const priorityMeta =
+                        PRIORITY_META[
+                          task.priority as keyof typeof PRIORITY_META
+                        ];
 
-                  <Bar />
+                      const projectName =
+                        projects.find(
+                          (p) => String(p.id) === String(task.projectId),
+                        )?.name ?? 'Projet associé';
 
-                  <div className="flex items-center justify-between gap-2">
-                    <Foot>Échéance : {formatDate(task.dueDate)}</Foot>
-                    <CardActions
-                      onEdit={() => handleEditTask(task)}
-                      onAssign={() => handleAssignTask(task)}
-                      onDelete={() => void handleDeleteTask(task)}
-                    />
+                      return (
+                        <article
+                          key={task.id}
+                          className={`
+                            rounded-2xl border border-[#e8eaf3] p-4
+                            shadow-[0_2px_14px_rgba(38,58,129,0.07)]
+                            transition hover:shadow-[0_6px_20px_rgba(38,58,129,0.12)]
+                            border-l-4 ${col.border} ${col.cardBg}
+                          `}
+                        >
+                          {/* Priorité */}
+                          {priorityMeta && (
+                            <div className="mb-2.5">
+                              <DotChip dot={priorityMeta.dot}>
+                                Priorité {priorityMeta.label.toLowerCase()}
+                              </DotChip>
+                            </div>
+                          )}
+
+                          {/* Titre + Avatar */}
+                          <div className="flex items-start gap-3">
+                            <span
+                              className={`${AVATAR} h-10 w-10 shrink-0 text-sm`}
+                            >
+                              {initials(task.title || 'TA')}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="line-clamp-2 text-[14px] font-bold leading-snug text-[#16193a]">
+                                {task.title}
+                              </h3>
+                              {task.projectId && (
+                                <p className="mt-0.5 truncate text-xs text-[#707ead]">
+                                  📁 {projectName}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Assignees */}
+                          {(task.assigneeIds?.length ?? 0) > 0 && (
+                            <div className="mt-3 flex -space-x-2">
+                              {(task.assigneeIds ?? []).map((id) => {
+                                const user = findUser(id);
+                                return (
+                                  <span
+                                    key={id}
+                                    title={
+                                      user
+                                        ? `${user.name} (${
+                                            user.role === 'HOD'
+                                              ? 'Chef'
+                                              : 'Employé'
+                                          })`
+                                        : String(id)
+                                    }
+                                    className={`${AVATAR} h-7 w-7 text-[10px] ring-2 ring-white`}
+                                  >
+                                    {user ? initials(user.name) : '?'}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <Bar />
+
+                          <div className="flex items-center justify-between gap-2">
+                            <Foot>
+                              Échéance : {formatDate(task.dueDate)}
+                            </Foot>
+                            <CardActions
+                              onEdit={() => handleEditTask(task)}
+                              onAssign={() => handleAssignTask(task)}
+                              onDelete={() => void handleDeleteTask(task)}
+                            />
+                          </div>
+                        </article>
+                      );
+                    })}
+
+                    {columnTasks.length === 0 && (
+                      <div className="py-10 text-center text-sm text-slate-400">
+                        Aucune tâche
+                      </div>
+                    )}
                   </div>
-                </article>
+                </div>
               );
             })}
           </div>

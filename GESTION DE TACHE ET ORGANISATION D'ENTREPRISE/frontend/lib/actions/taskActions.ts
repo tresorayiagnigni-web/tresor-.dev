@@ -33,6 +33,7 @@ export interface CreateTaskInput {
   priorite?: TaskPriority;
   userId: number;
   Date_limite?: string;
+  projectId?: number | null;
 }
 
 export interface UpdateTaskInput {
@@ -42,6 +43,7 @@ export interface UpdateTaskInput {
   priorite?: TaskPriority;
   userId?: number;
   Date_limite?: string;
+   projectId?: number | null;
 }
 
 export interface FilterTaskDto {
@@ -180,6 +182,7 @@ export async function createTask(input: CreateTaskInput): Promise<ApiResponse<Ta
         priorite: input.priorite || 'Moyen',
         userId: input.userId,
         Date_limite: input.Date_limite,
+        projectId: input.projectId || null,   // ← ajoute cette ligne
       }),
     });
 

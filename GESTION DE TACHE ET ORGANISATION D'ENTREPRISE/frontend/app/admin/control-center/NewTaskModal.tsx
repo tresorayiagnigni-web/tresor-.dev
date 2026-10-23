@@ -1,20 +1,16 @@
 "use client";
 
-// =====================================================================
-// components/admin/CreateTaskModal.tsx
-// Formulaire de création d'une tâche par l'administrateur.
-// La tâche peut être assignée à n'importe quel employé ou chef de
-// département (HOD), sans distinction.
-// =====================================================================
-
 import { useMemo, useState } from "react";
-import { createTask } from "@/lib/actions/projectActions";
-import type { Priority, Project, Task, UserLite } from "@/lib/actions/projectActions";
-import { CheckList, Field, Modal, NAVY, inputClass } from "./ui";
+import { type Task } from '@/lib/actions/taskActions';
+import type { Project, UserLite } from "@/lib/actions/projectActions";
+import { CheckList, Field, Modal, inputClass } from "./ui";
+import { createTask } from "@/lib/actions/taskActions";
+
+type TaskPriority = "Bas" | "Moyen" | "Elevee";
 
 export default function CreateTaskModal({
-  users, // tous les utilisateurs du système
-  projects, // projets existants (pour rattacher la tâche à l'un d'eux)
+  users,
+  projects,
   onClose,
   onCreated,
 }: {
@@ -23,60 +19,91 @@ export default function CreateTaskModal({
   onClose: () => void;
   onCreated: (task: Task) => void;
 }) {
-  // --- État du formulaire ----------------------------------------------
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState(""); // "" = aucun projet
-  const [priority, setPriority] = useState<Priority>("MEDIUM");
+  const [projectId, setProjectId] = useState("");
+  const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH">("MEDIUM");
   const [dueDate, setDueDate] = useState("");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
-  // --- État de l'interface ---------------------------------------------
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Prépare la liste des personnes assignables.
-  // useMemo : on ne recalcule que si `users` change (pas à chaque frappe).
   const assignable = useMemo(
     () =>
       users
-        // 1) On exclut l'administrateur : il crée les tâches, il ne les reçoit pas.
-        .filter((u) => u.role !== "ADMIN")
-        // 2) Tri : les chefs (HOD) d'abord, puis ordre alphabétique.
+        .filter((user) => user.role !== "ADMIN")
         .sort((a, b) =>
-          a.role === b.role ? a.name.localeCompare(b.name) : a.role === "HOD" ? -1 : 1
+          a.role === b.role
+            ? a.name.localeCompare(b.name)
+            : a.role === "HOD"
+              ? -1
+              : 1,
         )
-        // 3) Conversion au format attendu par CheckList, avec un badge de rôle.
-        .map((u) => ({
-          id: u.id,
-          label: u.name,
-          hint: u.email,
-          badge: u.role === "HOD" ? "Chef" : "Employé",
+        .map((user) => ({
+          id: user.id,
+          label: user.name,
+          hint: user.email,
+          badge: user.role === "HOD" ? "Chef" : "Employé",
         })),
-    [users]
+    [users],
   );
 
-  // --- Envoi du formulaire ---------------------------------------------
   async function submit() {
-    // Validation côté client.
-    if (!title.trim()) return setError("Donnez un titre à la tâche.");
-    if (assigneeIds.length === 0) return setError("Assignez la tâche à au moins une personne.");
+    if (!title.trim()) {
+      setError("Donnez un titre à la tâche.");
+      return;
+    }
+
+    if (!assigneeIds.length) {
+      setError("Assignez la tâche à au moins une personne.");
+      return;
+    }
+
+    if (projectId && !projects.some((project) => Number(project.id) === Number(projectId))) {
+      setError("Le projet sélectionné n'est plus disponible.");
+      return;
+    }
+
+    const userId = Number(assigneeIds[0]);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      setError("Le membre sélectionné est invalide.");
+      return;
+    }
 
     setError("");
     setLoading(true);
+
+    const priorityMap: Record<"LOW" | "MEDIUM" | "HIGH", TaskPriority> = {
+      LOW: "Bas",
+      MEDIUM: "Moyen",
+      HIGH: "Elevee",
+    };
+
     try {
-      const task = await createTask({
+      const response = await createTask({
         title: title.trim(),
-        description: description.trim(),
-        projectId: projectId || null, // "" => null (pas de projet)
-        assigneeIds,
-        priority,
-        dueDate: dueDate || null,
+        description: description.trim() || undefined,
+        userId,
+        priorite: priorityMap[priority],
+        Date_limite: dueDate || undefined,
+        projectId: projectId ? Number(projectId) : null,
+        status: "A_faire",
       });
-      onCreated(task); // le parent ajoute la tâche à sa liste
+
+      if (!response.success || !response.data) {
+        throw new Error(
+          response.message || "La tâche n'a pas pu être créée.",
+        );
+      }
+
+      onCreated(response.data as Task);
       onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Création impossible.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Création impossible.",
+      );
     } finally {
       setLoading(false);
     }
@@ -85,11 +112,18 @@ export default function CreateTaskModal({
   return (
     <Modal
       title="Nouvelle tâche"
-      subtitle="Assignez-la à des employés ou des chefs de département."
+      subtitle="Associez la tâche à un projet et assignez-la à un membre."
       onClose={onClose}
     >
       <Field label="Titre">
-        <input className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input
+          className={inputClass}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Ex. Développer la page de connexion"
+          required
+          disabled={loading}
+        />
       </Field>
 
       <Field label="Description">
@@ -98,31 +132,43 @@ export default function CreateTaskModal({
           className={inputClass}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          placeholder="Décrivez le travail à réaliser..."
+          disabled={loading}
         />
       </Field>
 
-      {/* Projet et priorité côte à côte (une colonne sur mobile) */}
       <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
         <Field label="Projet">
           <select
             className={inputClass}
             value={projectId}
             onChange={(e) => setProjectId(e.target.value)}
+            disabled={loading}
           >
             <option value="">Aucun projet</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
               </option>
             ))}
           </select>
+
+          {projects.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600">
+              Aucun projet disponible.
+            </p>
+          )}
         </Field>
 
         <Field label="Priorité">
           <select
             className={inputClass}
             value={priority}
-            onChange={(e) => setPriority(e.target.value as Priority)}
+            onChange={(e) =>
+              setPriority(e.target.value as "LOW" | "MEDIUM" | "HIGH")
+            }
+            disabled={loading}
           >
             <option value="LOW">Basse</option>
             <option value="MEDIUM">Moyenne</option>
@@ -137,12 +183,27 @@ export default function CreateTaskModal({
           className={inputClass}
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
+          disabled={loading}
         />
       </Field>
 
-      {/* Choix des personnes, avec barre de recherche */}
-      <span className="mb-1.5 block text-sm font-semibold text-slate-700">Assigner à</span>
-      <CheckList items={assignable} selected={assigneeIds} onChange={setAssigneeIds} searchable />
+      <span className="mb-1.5 block text-sm font-semibold text-slate-700">
+        Assigner à
+      </span>
+
+      <CheckList
+        items={assignable}
+        selected={assigneeIds}
+        onChange={setAssigneeIds}
+        searchable
+      />
+
+      {assigneeIds.length > 1 && (
+        <p className="mt-1 text-xs text-amber-600">
+          Ton backend utilise actuellement un seul userId :
+          seul le premier membre sélectionné sera assigné.
+        </p>
+      )}
 
       {error && (
         <p role="alert" className="mb-3 text-sm font-medium text-red-600">
@@ -152,15 +213,19 @@ export default function CreateTaskModal({
 
       <div className="flex justify-end gap-2">
         <button
+          type="button"
           onClick={onClose}
-          className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+          disabled={loading}
+          className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-60"
         >
           Annuler
         </button>
+
         <button
+          type="button"
           onClick={submit}
-          disabled={loading}
-          className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 ${NAVY}`}
+          disabled={loading || !title.trim() || assigneeIds.length === 0}
+          className="rounded-xl bg-[#0A1628] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
         >
           {loading ? "Création…" : "Créer la tâche"}
         </button>

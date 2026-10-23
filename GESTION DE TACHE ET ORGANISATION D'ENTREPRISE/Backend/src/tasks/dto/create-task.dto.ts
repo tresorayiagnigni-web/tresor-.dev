@@ -26,4 +26,8 @@ export class CreateTaskDto {
     @IsDateString()
     Date_limite?: string
 
+  @IsOptional()          // mets @IsNotEmpty() si le projet est obligatoire
+  @IsNumber()
+  projectId?: number;
+
 }

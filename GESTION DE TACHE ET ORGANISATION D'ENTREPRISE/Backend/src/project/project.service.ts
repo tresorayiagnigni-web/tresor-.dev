@@ -66,6 +66,9 @@ export class ProjectsService {
       relations: {
         departement: true,
         createdBy: true,
+        tasks: {
+          user: true,              // si tu veux aussi l’employé
+        },
       },
       order: {
         createdAt: 'DESC',
@@ -84,6 +87,9 @@ export class ProjectsService {
       relations: {
         departement: true,
         createdBy: true,
+        tasks: {
+          user: true,              // si tu veux aussi l’employé
+        },
       },
     });
 
@@ -95,6 +101,17 @@ export class ProjectsService {
 
     return project;
   }
+
+  async findByDepartment(departmentId: number) {
+  return this.projectRepository.find({
+    where: {
+      // adapte le nom du champ selon ton entity
+      departement: { id: departmentId },
+      // ou : departementId: departmentId,
+    },
+    relations: { departement: true }
+  });
+}
 
   async update(
     id: number,
