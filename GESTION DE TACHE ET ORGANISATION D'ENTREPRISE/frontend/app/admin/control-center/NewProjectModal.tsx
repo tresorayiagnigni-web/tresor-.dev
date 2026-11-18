@@ -1,13 +1,7 @@
 "use client";
 
-// =====================================================================
-// components/admin/CreateProjectModal.tsx
-// Formulaire de création d'un projet par l'administrateur.
-// Un projet est assigné à un ou plusieurs départements.
-// =====================================================================
-
 import { useState } from "react";
-import { createProject } from "@/lib/workApi";
+import { createProject } from "@/lib/actions/projectActions";
 import type { Department, Project } from "@/types/work";
 import { CheckList, Field, Modal, NAVY, inputClass } from "./ui";
 
@@ -20,7 +14,6 @@ export default function CreateProjectModal({
   onClose: () => void;
   onCreated: (project: Project) => void;
 }) {
-  // --- État du formulaire : une variable par champ ----------------------
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");

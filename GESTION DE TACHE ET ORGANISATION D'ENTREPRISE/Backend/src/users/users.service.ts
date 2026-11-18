@@ -299,18 +299,6 @@ export class UsersService {
     return await this.userRepository.save(user);
   }
 
-  // async remove(id: number): Promise<{ message: string }> {
-  //   const user = await this.userRepository.findOne({ where: { id } });
-
-  //   if (!user) {
-  //     throw new NotFoundException('Utilisateur introuvable');
-  //   }
-
-  //   await this.userRepository.remove(user);
-
-  //   return { message: 'Utilisateur supprimé avec succès' };
-  // }
-
   async remove(id: number): Promise<{ message: string }> {
   const user = await this.userRepository.findOne({ where: { id } });
 

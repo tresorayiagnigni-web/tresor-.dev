@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { EmployeeLayout } from '@/app/layout/employeeLayout';
 import {
   Plus,
@@ -9,11 +9,14 @@ import {
   AlertCircle,
   X,
 } from 'lucide-react';
-import { getUserById, type User } from '@/lib/actions/userActions';
+import { getProfile, type User } from '@/lib/actions/userActions';
 import { getTasks, type Task } from '@/lib/actions/taskActions';
-import { getDepartmentById, type Department } from '@/lib/actions/departmentActions';
+import {
+  getDepartmentById,
+  type Department,
+} from '@/lib/actions/departmentActions';
 
-// ========== TYPE DEFINITIONS ==========
+// ========== TYPES ==========
 type RequestType = 'leave' | 'expense';
 
 interface Request {
@@ -32,22 +35,30 @@ interface FormData {
   comment: string;
 }
 
-// ========== MAIN COMPONENT ==========
-const EmployeeProfilePage: React.FC = () => {
-  // ===== EMPLOYEE INFO - WILL BE FETCHED FROM API =====
-  const [employeeId, setEmployeeId] = useState<number | null>(null);
-  const [employeeName, setEmployeeName] = useState<string>('Loading...');
-  const [employeeInitials, setEmployeeInitials] = useState<string>('??');
-  const [employeeRole, setEmployeeRole] = useState<string>('Loading...');
+// ========== HELPERS ==========
+function getTaskAssigneeIds(task: any): number[] {
+  if (Array.isArray(task.assigneeIds)) {
+    return task.assigneeIds.map(Number).filter(Number.isFinite);
+  }
+  if (task.userId != null) return [Number(task.userId)];
+  if (task.assignedTo != null) return [Number(task.assignedTo)];
+  if (task.user?.id != null) return [Number(task.user.id)];
+  return [];
+}
 
-  // ===== STATE MANAGEMENT =====
+// ========== MAIN COMPONENT ==========
+export default function EmployeeProfilePage() {
+  const [employeeName, setEmployeeName] = useState('Loading...');
+  const [employeeInitials, setEmployeeInitials] = useState('??');
+  const [employeeRole, setEmployeeRole] = useState('Loading...');
+
   const [user, setUser] = useState<User | null>(null);
   const [department, setDepartment] = useState<Department | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     type: 'leave',
@@ -57,7 +68,7 @@ const EmployeeProfilePage: React.FC = () => {
     comment: '',
   });
 
-  // ===== MOCK REQUESTS DATA =====
+  // Mock requests (à remplacer plus tard par une API)
   const [requests] = useState<Request[]>([
     {
       id: '1',
@@ -90,72 +101,110 @@ const EmployeeProfilePage: React.FC = () => {
   ]);
 
   // ===== LOAD DATA =====
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Get employee ID from cookies or localStorage
-      // For now, using a placeholder - in production, get from auth context
-      const userId = 2; // This should come from your auth context
-      setEmployeeId(userId);
+      // 1. Profil de l'utilisateur connecté
+      const profileResult = await getProfile();
 
-      // Fetch user data
-      const userResult = await getUserById(userId);
-      if (userResult.success && userResult.data) {
-        const userData = userResult.data;
-        setUser(userData);
-        
-        // Update employee info from API
-        setEmployeeName(userData.nom || 'Unknown');
-        setEmployeeInitials(
-          userData.nom?.split(' ').map(n => n[0]).join('') || '??'
+      if (!profileResult.success || !profileResult.data) {
+        throw new Error(
+          profileResult.message || 'Impossible de récupérer votre profil.',
         );
-        setEmployeeRole(
-          userData.role === 'HOD' ? 'Head of Department' : 
-          userData.role === 'ADMIN' ? 'Administrator' : 
-          'Employee'
-        );
-
-        // Fetch department if user has departmentId
-        if (userData.departementId) {
-          const deptResult = await getDepartmentById(userData.departementId);
-          if (deptResult.success && deptResult.data) {
-            setDepartment(deptResult.data);
-          }
-        }
-      } else {
-        setError(userResult.message || 'Failed to load user profile');
       }
 
-      // Fetch tasks to get task count
+      const raw = profileResult.data as any;
+      const currentUser: User = raw?.data?.user ?? raw?.user ?? raw?.data ?? raw;
+
+      if (currentUser.id == null) {
+        throw new Error("L'identifiant de l'utilisateur est absent du profil.");
+      }
+
+      setUser(currentUser);
+
+      const name = (currentUser as any).nom || (currentUser as any).name || 'Employee';
+      setEmployeeName(name);
+      setEmployeeInitials(
+        name
+          .trim()
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((part: string) => part.charAt(0).toUpperCase())
+          .join(''),
+      );
+      setEmployeeRole(
+        currentUser.role === 'HOD'
+          ? 'Head of Department'
+          : currentUser.role === 'ADMIN'
+            ? 'Administrator'
+            : 'Employee',
+      );
+
+      const currentUserId = Number(currentUser.id);
+
+      // 2. Département
+      const deptId =
+        (currentUser as any).departementId ??
+        (currentUser as any).departmentId ??
+        (currentUser as any).departement?.id;
+
+      if (deptId != null) {
+        const deptResult = await getDepartmentById(Number(deptId));
+        if (deptResult.success && deptResult.data) {
+          setDepartment(deptResult.data);
+        }
+      }
+
+      // 3. Tâches de l'employé
       const taskResult = await getTasks();
 
+      console.log('Profil connecté :', currentUser);
       console.log('Résultat getTasks :', taskResult);
 
-      if (taskResult.success && taskResult.data) {
-        const userTasks = taskResult.data.filter(t => t.userId === userId);
-        setTasks(userTasks);
+      if (taskResult.success && Array.isArray(taskResult.data)) {
+        const myTasks = (taskResult.data as any[]).filter((task) => {
+          const assigneeIds = getTaskAssigneeIds(task);
+          return assigneeIds.includes(currentUserId);
+        });
+        setTasks(myTasks as Task[]);
+      } else {
+        setTasks([]);
       }
     } catch (err) {
-      setError('Failed to load profile data');
+      console.error('Erreur profil employé :', err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to load profile data',
+      );
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [loadData]);
 
   // ===== DERIVED STATE =====
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === 'Terminer').length;
-  const pendingTasks = tasks.filter(t => t.status !== 'Terminer').length;
-  
-  const userStatus = user?.status === 'true' || user?.status === true;
-  const userPhone = user?.telephone || 'Not provided';
-  const userDepartment = department?.nom_departement || (typeof user?.departement === 'string' ? user.departement : undefined) || 'Not assigned';
+  const completedTasks = tasks.filter((t) => t.status === 'Terminer').length;
+  const pendingTasks = tasks.filter((t) => t.status !== 'Terminer').length;
+
+  const userStatus =
+    (user as any)?.status === true ||
+    (user as any)?.status === 'true' ||
+    (user as any)?.status === 'ACTIVE';
+
+  const userPhone = (user as any)?.telephone || (user as any)?.phone || 'Not provided';
+  const userDepartment =
+    department?.nom_departement ||
+    (typeof (user as any)?.departement === 'string'
+      ? (user as any).departement
+      : (user as any)?.departement?.nom_departement) ||
+    'Not assigned';
   const userEmail = user?.email || 'No email on file';
 
   // ===== EVENT HANDLERS =====
@@ -170,37 +219,30 @@ const EmployeeProfilePage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-  };
+  const closeModal = () => setIsModalOpen(false);
 
   const handleFormChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmitRequest = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate API call
+    // Simulation (à remplacer par un vrai appel API plus tard)
     setTimeout(() => {
       setSuccessMessage('Request submitted successfully!');
       setIsSubmitting(false);
       closeModal();
-
-      setTimeout(() => {
-        setSuccessMessage(null);
-      }, 4000);
+      setTimeout(() => setSuccessMessage(null), 4000);
     }, 1000);
   };
 
-  // ===== HELPER FUNCTIONS =====
   const getStatusBadge = (status: Request['status']) => {
     const config = {
       approved: {
@@ -234,7 +276,7 @@ const EmployeeProfilePage: React.FC = () => {
     });
   };
 
-  // ===== LOADING STATE =====
+  // ===== LOADING =====
   if (isLoading) {
     return (
       <EmployeeLayout
@@ -244,9 +286,9 @@ const EmployeeProfilePage: React.FC = () => {
         employeeInitials={employeeInitials}
         employeeRole={employeeRole}
       >
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex min-h-[400px] items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#263A81] mx-auto mb-4"></div>
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-[#263A81]" />
             <p className="text-[#6B7280]">Loading profile...</p>
           </div>
         </div>
@@ -254,7 +296,7 @@ const EmployeeProfilePage: React.FC = () => {
     );
   }
 
-  // ===== ERROR STATE =====
+  // ===== ERROR =====
   if (error) {
     return (
       <EmployeeLayout
@@ -264,13 +306,14 @@ const EmployeeProfilePage: React.FC = () => {
         employeeInitials={employeeInitials}
         employeeRole={employeeRole}
       >
-        <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <div className="text-red-500 text-center">
+        <div className="flex min-h-[400px] flex-col items-center justify-center">
+          <div className="text-center text-red-500">
             <p className="text-lg font-medium">Error Loading Profile</p>
-            <p className="text-sm">{error}</p>
+            <p className="mt-1 text-sm">{error}</p>
             <button
-              onClick={loadData}
-              className="mt-4 px-4 py-2 bg-[#263A81] text-white rounded-lg hover:bg-[#1e2f6a] transition"
+              type="button"
+              onClick={() => void loadData()}
+              className="mt-4 rounded-lg bg-[#263A81] px-4 py-2 text-white transition hover:bg-[#1e2f6a]"
             >
               Retry
             </button>
@@ -280,7 +323,7 @@ const EmployeeProfilePage: React.FC = () => {
     );
   }
 
-  // ========== RENDER ==========
+  // ===== RENDER =====
   return (
     <EmployeeLayout
       pageTitle="My Profile"
@@ -289,61 +332,75 @@ const EmployeeProfilePage: React.FC = () => {
       employeeInitials={employeeInitials}
       employeeRole={employeeRole}
     >
-      {/* Success Message */}
       {successMessage && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
           <CheckCircle size={20} className="text-green-600" />
-          <span className="text-green-800 font-medium">{successMessage}</span>
+          <span className="font-medium text-green-800">{successMessage}</span>
         </div>
       )}
 
-      <div className="space-y-6 w-full">
-        {/* ===== EMPLOYEE IDENTITY CARD ===== */}
-        <section className="bg-white rounded-xl border border-[#E5E7EB] p-4 sm:p-6 shadow-sm w-full box-border">
-          <div className="flex flex-col sm:flex-row lg:flex-row gap-6 items-center sm:items-start">
+      <div className="w-full space-y-6">
+        {/* IDENTITY CARD */}
+        <section className="box-border w-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
             <div className="flex-shrink-0">
-              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-[#263A81] flex items-center justify-center text-white text-3xl md:text-4xl font-bold shadow-sm">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#263A81] text-3xl font-bold text-white shadow-sm md:h-32 md:w-32 md:text-4xl">
                 {employeeInitials}
               </div>
             </div>
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full min-w-0">
+
+            <div className="grid w-full min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-[#6B7280] mb-1">
+                <label className="mb-1 block text-sm font-medium text-[#6B7280]">
                   Full Name
                 </label>
-                <p className="text-[#1F2937] font-medium break-words">{employeeName}</p>
+                <p className="break-words font-medium text-[#1F2937]">
+                  {employeeName}
+                </p>
               </div>
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-[#6B7280] mb-1">
+                <label className="mb-1 block text-sm font-medium text-[#6B7280]">
                   Job Title
                 </label>
-                <p className="text-[#1F2937] font-medium break-words">{employeeRole}</p>
+                <p className="break-words font-medium text-[#1F2937]">
+                  {employeeRole}
+                </p>
               </div>
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-[#6B7280] mb-1">
+                <label className="mb-1 block text-sm font-medium text-[#6B7280]">
                   Assigned Department
                 </label>
-                <p className="text-[#1F2937] font-medium break-words">{userDepartment}</p>
+                <p className="break-words font-medium text-[#1F2937]">
+                  {userDepartment}
+                </p>
               </div>
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-[#6B7280] mb-1">
+                <label className="mb-1 block text-sm font-medium text-[#6B7280]">
                   Corporate Email
                 </label>
-                <p className="text-[#1F2937] font-medium break-all select-all">{userEmail}</p>
+                <p className="break-all font-medium text-[#1F2937] select-all">
+                  {userEmail}
+                </p>
               </div>
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-[#6B7280] mb-1">
+                <label className="mb-1 block text-sm font-medium text-[#6B7280]">
                   Phone Number
                 </label>
-                <p className="text-[#1F2937] font-medium break-words">{userPhone}</p>
+                <p className="break-words font-medium text-[#1F2937]">
+                  {userPhone}
+                </p>
               </div>
               <div className="min-w-0">
-                <label className="block text-sm font-medium text-[#6B7280] mb-1">
+                <label className="mb-1 block text-sm font-medium text-[#6B7280]">
                   Account Status
                 </label>
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                  userStatus ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    userStatus
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}
+                >
                   {userStatus ? 'Active' : 'Inactive'}
                 </span>
               </div>
@@ -351,56 +408,64 @@ const EmployeeProfilePage: React.FC = () => {
           </div>
         </section>
 
-        {/* ===== TASK SUMMARY ===== */}
-        <section className="bg-white rounded-xl border border-[#E5E7EB] p-4 sm:p-6 shadow-sm w-full box-border">
-          <h2 className="text-xl font-bold text-[#1F2937] mb-4">Task Summary</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-[#FEFEFC] rounded-lg border border-[#E5E7EB] p-4 text-center">
+        {/* TASK SUMMARY */}
+        <section className="box-border w-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
+          <h2 className="mb-4 text-xl font-bold text-[#1F2937]">Task Summary</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] p-4 text-center">
               <p className="text-2xl font-bold text-[#1F2937]">{totalTasks}</p>
               <p className="text-sm text-[#6B7280]">Total Tasks</p>
             </div>
-            <div className="bg-[#FEFEFC] rounded-lg border border-[#E5E7EB] p-4 text-center">
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] p-4 text-center">
               <p className="text-2xl font-bold text-amber-600">{pendingTasks}</p>
               <p className="text-sm text-[#6B7280]">Pending</p>
             </div>
-            <div className="bg-[#FEFEFC] rounded-lg border border-[#E5E7EB] p-4 text-center">
+            <div className="rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] p-4 text-center">
               <p className="text-2xl font-bold text-green-600">{completedTasks}</p>
               <p className="text-sm text-[#6B7280]">Completed</p>
             </div>
           </div>
         </section>
 
-        {/* ===== REQUEST CONSOLE ===== */}
-        <section className="bg-white rounded-xl border border-[#E5E7EB] p-4 sm:p-6 shadow-sm w-full box-border">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        {/* REQUEST CONSOLE */}
+        <section className="box-border w-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-bold text-[#1F2937]">Request Console</h2>
-              <p className="text-sm text-[#6B7280] mt-1">
+              <p className="mt-1 text-sm text-[#6B7280]">
                 Submit new requests for approval
               </p>
             </div>
             <button
+              type="button"
               onClick={openModal}
-              className="flex items-center justify-center gap-2 px-5 py-3 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 shadow-lg shadow-[#263A81]/20 w-full sm:w-auto self-start sm:self-center text-sm"
+              className="flex w-full items-center justify-center gap-2 self-start rounded-lg bg-[#263A81] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#263A81]/20 transition hover:bg-[#1e2f6a] active:scale-95 sm:w-auto sm:self-center"
             >
               <Plus size={18} />
               Submit New Request
             </button>
           </div>
 
-          {/* ===== HISTORICAL REQUESTS TABLE ===== */}
           <div className="mt-6 w-full overflow-hidden">
-            <h3 className="text-sm font-semibold text-[#1F2937] mb-4">
+            <h3 className="mb-4 text-sm font-semibold text-[#1F2937]">
               Historical Requests
             </h3>
-            <div className="overflow-x-auto rounded-lg border border-[#E5E7EB] w-full">
-              <table className="w-full text-sm min-w-[600px] table-auto">
+            <div className="w-full overflow-x-auto rounded-lg border border-[#E5E7EB]">
+              <table className="w-full min-w-[600px] table-auto text-sm">
                 <thead>
                   <tr className="border-b border-[#E5E7EB] bg-gray-50/70">
-                    <th className="text-left py-3.5 px-4 text-[#6B7280] font-semibold tracking-wide">Date</th>
-                    <th className="text-left py-3.5 px-4 text-[#6B7280] font-semibold tracking-wide">Request Type</th>
-                    <th className="text-left py-3.5 px-4 text-[#6B7280] font-semibold tracking-wide">Details</th>
-                    <th className="text-left py-3.5 px-4 text-[#6B7280] font-semibold tracking-wide">Status</th>
+                    <th className="px-4 py-3.5 text-left font-semibold tracking-wide text-[#6B7280]">
+                      Date
+                    </th>
+                    <th className="px-4 py-3.5 text-left font-semibold tracking-wide text-[#6B7280]">
+                      Request Type
+                    </th>
+                    <th className="px-4 py-3.5 text-left font-semibold tracking-wide text-[#6B7280]">
+                      Details
+                    </th>
+                    <th className="px-4 py-3.5 text-left font-semibold tracking-wide text-[#6B7280]">
+                      Status
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E7EB]">
@@ -409,16 +474,20 @@ const EmployeeProfilePage: React.FC = () => {
                     return (
                       <tr
                         key={request.id}
-                        className="hover:bg-gray-50/50 transition duration-150"
+                        className="transition duration-150 hover:bg-gray-50/50"
                       >
-                        <td className="py-3.5 px-4 text-[#1F2937] font-medium whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3.5 font-medium text-[#1F2937]">
                           {formatDate(request.date)}
                         </td>
-                        <td className="py-3.5 px-4 text-[#1F2937] font-medium whitespace-nowrap">{request.type}</td>
-                        <td className="py-3.5 px-4 text-[#6B7280] max-w-[240px] truncate">{request.details}</td>
-                        <td className="py-3.5 px-4 whitespace-nowrap">
+                        <td className="whitespace-nowrap px-4 py-3.5 font-medium text-[#1F2937]">
+                          {request.type}
+                        </td>
+                        <td className="max-w-[240px] truncate px-4 py-3.5 text-[#6B7280]">
+                          {request.details}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5">
                           <span
-                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${statusConfig.bg} ${statusConfig.text}`}
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold tracking-wide ${statusConfig.bg} ${statusConfig.text}`}
                           >
                             {statusConfig.icon}
                             {statusConfig.label}
@@ -434,26 +503,29 @@ const EmployeeProfilePage: React.FC = () => {
         </section>
       </div>
 
-      {/* ===== MODAL OVERLAY ===== */}
+      {/* MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl animate-scale-in">
-            <div className="flex items-center justify-between p-6 border-b border-[#E5E7EB]">
-              <h2 className="text-xl font-bold text-[#1F2937]">Submit New Request</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] p-6">
+              <h2 className="text-xl font-bold text-[#1F2937]">
+                Submit New Request
+              </h2>
               <button
+                type="button"
                 onClick={closeModal}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                className="rounded-lg p-2 transition hover:bg-gray-100"
                 aria-label="Close modal"
               >
                 <X size={20} className="text-[#6B7280]" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitRequest} className="p-6 space-y-5">
+            <form onSubmit={handleSubmitRequest} className="space-y-5 p-6">
               <div>
                 <label
                   htmlFor="requestType"
-                  className="block text-sm font-medium text-[#1F2937] mb-1"
+                  className="mb-1 block text-sm font-medium text-[#1F2937]"
                 >
                   Request Type <span className="text-red-500">*</span>
                 </label>
@@ -462,7 +534,7 @@ const EmployeeProfilePage: React.FC = () => {
                   name="type"
                   value={formData.type}
                   onChange={handleFormChange}
-                  className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                  className="h-12 w-full rounded-lg border border-[#D1D5DB] bg-white px-4 text-[#1F2937] transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                   required
                   disabled={isSubmitting}
                 >
@@ -472,11 +544,11 @@ const EmployeeProfilePage: React.FC = () => {
               </div>
 
               {formData.type === 'leave' && (
-                <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label
                       htmlFor="startDate"
-                      className="block text-sm font-medium text-[#1F2937] mb-1"
+                      className="mb-1 block text-sm font-medium text-[#1F2937]"
                     >
                       Start Date <span className="text-red-500">*</span>
                     </label>
@@ -486,7 +558,7 @@ const EmployeeProfilePage: React.FC = () => {
                       name="startDate"
                       value={formData.startDate}
                       onChange={handleFormChange}
-                      className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition text-sm"
+                      className="h-12 w-full rounded-lg border border-[#D1D5DB] bg-white px-4 text-sm text-[#1F2937] transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                       required
                       disabled={isSubmitting}
                     />
@@ -494,7 +566,7 @@ const EmployeeProfilePage: React.FC = () => {
                   <div>
                     <label
                       htmlFor="endDate"
-                      className="block text-sm font-medium text-[#1F2937] mb-1"
+                      className="mb-1 block text-sm font-medium text-[#1F2937]"
                     >
                       End Date <span className="text-red-500">*</span>
                     </label>
@@ -504,7 +576,7 @@ const EmployeeProfilePage: React.FC = () => {
                       name="endDate"
                       value={formData.endDate}
                       onChange={handleFormChange}
-                      className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition text-sm"
+                      className="h-12 w-full rounded-lg border border-[#D1D5DB] bg-white px-4 text-sm text-[#1F2937] transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                       required
                       disabled={isSubmitting}
                     />
@@ -513,10 +585,10 @@ const EmployeeProfilePage: React.FC = () => {
               )}
 
               {formData.type === 'expense' && (
-                <div className="animate-fade-in">
+                <div>
                   <label
                     htmlFor="amount"
-                    className="block text-sm font-medium text-[#1F2937] mb-1"
+                    className="mb-1 block text-sm font-medium text-[#1F2937]"
                   >
                     Requested Amount (CFA) <span className="text-red-500">*</span>
                   </label>
@@ -529,7 +601,7 @@ const EmployeeProfilePage: React.FC = () => {
                     placeholder="0"
                     min="0"
                     step="100"
-                    className="w-full h-12 px-4 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+                    className="h-12 w-full rounded-lg border border-[#D1D5DB] bg-white px-4 text-[#1F2937] transition placeholder:text-[#6B7280] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                     required
                     disabled={isSubmitting}
                   />
@@ -539,7 +611,7 @@ const EmployeeProfilePage: React.FC = () => {
               <div>
                 <label
                   htmlFor="comment"
-                  className="block text-sm font-medium text-[#1F2937] mb-1"
+                  className="mb-1 block text-sm font-medium text-[#1F2937]"
                 >
                   Comment / Description
                 </label>
@@ -550,28 +622,28 @@ const EmployeeProfilePage: React.FC = () => {
                   onChange={handleFormChange}
                   rows={3}
                   placeholder="Provide additional details about your request..."
-                  className="w-full px-4 py-3 rounded-lg border border-[#D1D5DB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition resize-none"
+                  className="w-full resize-none rounded-lg border border-[#D1D5DB] bg-white px-4 py-3 text-[#1F2937] transition placeholder:text-[#6B7280] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#263A81]"
                   disabled={isSubmitting}
                 />
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
+              <div className="flex gap-3 border-t border-[#E5E7EB] pt-4">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 px-4 py-3 rounded-lg border border-[#D1D5DB] text-[#1F2937] font-medium hover:bg-gray-50 transition"
+                  className="flex-1 rounded-lg border border-[#D1D5DB] px-4 py-3 font-medium text-[#1F2937] transition hover:bg-gray-50"
                   disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-[#263A81] text-white font-bold rounded-lg hover:bg-[#1e2f6a] transition-all duration-200 active:scale-95 flex items-center justify-center gap-2"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#263A81] px-4 py-3 font-bold text-white transition hover:bg-[#1e2f6a] active:scale-95"
                   disabled={isSubmitting}
                 >
                   {isSubmitting ? (
                     <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-white" />
                       Submitting...
                     </>
                   ) : (
@@ -583,26 +655,6 @@ const EmployeeProfilePage: React.FC = () => {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-        .animate-scale-in { animation: scaleIn 0.2s ease-out; }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin { animation: spin 1s linear infinite; }
-      `}</style>
     </EmployeeLayout>
   );
-};
-
-export default EmployeeProfilePage;
+}

@@ -1,11 +1,8 @@
-// app/employee/tasks/page.tsx
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { EmployeeLayout } from '@/app/layout/employeeLayout';
 import {
-  Plus,
   CheckSquare,
   Calendar,
   Clock,
@@ -24,113 +21,129 @@ import {
   type TaskStatus,
   type TaskPriority,
 } from '@/lib/actions/taskActions';
-import { getUserById, type User,getProfile } from '@/lib/actions/userActions';
+import { getProfile, type User } from '@/lib/actions/userActions';
 
-// ========== TYPE DEFINITIONS ==========
+// ========== TYPES ==========
 type FilterType = 'all' | 'pending' | 'completed';
 
-// ========== MAIN COMPONENT ==========
-const EmployeeTasksPage: React.FC = () => {
-  // ===== EMPLOYEE INFO =====
-  // In production, this would come from auth context
-  const employeeId = 2; // Placeholder - John Doe
-  const employeeName = 'John Doe';
-  const employeeInitials = 'JD';
-  const employeeRole = 'Software Engineer';
+// ========== HELPERS ==========
+function getTaskAssigneeIds(task: any): number[] {
+  if (Array.isArray(task.assigneeIds)) {
+    return task.assigneeIds.map(Number).filter(Number.isFinite);
+  }
+  if (task.userId != null) return [Number(task.userId)];
+  if (task.assignedTo != null) return [Number(task.assignedTo)];
+  if (task.user?.id != null) return [Number(task.user.id)];
+  return [];
+}
 
-  // ===== STATE MANAGEMENT =====
+function getTaskDueDate(task: any): string | null {
+  return (
+    task.Date_limite ??
+    task.date_limite ??
+    task.dateLimite ??
+    task.dueDate ??
+    null
+  );
+}
+
+// ========== MAIN COMPONENT ==========
+export default function EmployeeTasksPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // ===== LOAD DATA =====
- const loadData = useCallback(async () => {
-  setIsLoading(true);
-  setError(null);
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
 
-  try {
-    // Récupérer le profil de l'utilisateur connecté
-    const userResult = await getProfile();
+    try {
+      // 1. Profil de l'utilisateur connecté
+      const userResult = await getProfile();
 
-    if (!userResult.success || !userResult.data) {
-      throw new Error(
-        userResult.message || 'Impossible de récupérer votre profil.',
+      if (!userResult.success || !userResult.data) {
+        throw new Error(
+          userResult.message || 'Impossible de récupérer votre profil.',
+        );
+      }
+
+      const profileResponse = userResult.data as User & { data?: User };
+      const currentUser = profileResponse.data ?? profileResponse;
+
+      if (currentUser.id == null) {
+        throw new Error(
+          "L'identifiant de l'utilisateur connecté est absent du profil.",
+        );
+      }
+
+      setUser(currentUser);
+
+      const currentUserId = Number(currentUser.id);
+
+      // 2. Tâches
+      const taskResult = await getTasks();
+
+      console.log('Profil connecté :', currentUser);
+      console.log('Tâches récupérées :', taskResult);
+
+      if (!taskResult.success) {
+        throw new Error(
+          taskResult.message || 'Impossible de récupérer vos tâches.',
+        );
+      }
+
+      if (!Array.isArray(taskResult.data)) {
+        throw new Error('Le backend a retourné une liste de tâches invalide.');
+      }
+
+      // Filtre : uniquement les tâches assignées à l'employé connecté
+      const myTasks = (taskResult.data as any[]).filter((task) => {
+        const assigneeIds = getTaskAssigneeIds(task);
+        return assigneeIds.includes(currentUserId);
+      });
+
+      console.log('Mes tâches filtrées :', myTasks);
+      setTasks(myTasks as Task[]);
+    } catch (err) {
+      console.error('Erreur de chargement :', err);
+      setTasks([]);
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Une erreur est survenue lors du chargement.',
       );
+    } finally {
+      setIsLoading(false);
     }
+  }, []);
 
-    // Selon la réponse actuelle du backend, le profil peut être
-    // directement dans data ou dans data.data.
-    const profileResponse = userResult.data as User & {
-      data?: User;
-    };
-
-    const currentUser = profileResponse.data ?? profileResponse;
-
-    if (currentUser.id == null) {
-      throw new Error(
-        "L'identifiant de l'utilisateur connecté est absent du profil.",
-      );
-    }
-
-    setUser(currentUser);
-
-    // Charger les tâches. Le backend doit identifier l'employé
-    // grâce au JWT et retourner uniquement ses tâches.
-    const taskResult = await getTasks();
-
-    console.log('Profil connecté :', currentUser);
-    console.log('Tâches récupérées :', taskResult);
-
-    if (!taskResult.success) {
-      throw new Error(
-        taskResult.message || 'Impossible de récupérer vos tâches.',
-      );
-    }
-
-    if (!Array.isArray(taskResult.data)) {
-      throw new Error(
-        'Le backend a retourné une liste de tâches invalide.',
-      );
-    }
-
-    setTasks(taskResult.data);
-  } catch (err) {
-    console.error('Erreur de chargement :', err);
-
-    setTasks([]);
-
-    setError(
-      err instanceof Error
-        ? err.message
-        : 'Une erreur est survenue lors du chargement.',
-    );
-  } finally {
-    setIsLoading(false);
-  }
-}, []);
+  // ← IMPORTANT : lance le chargement
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   // ===== DERIVED STATE =====
   const filteredTasks = useMemo(() => {
     let filtered = tasks;
 
-    // Apply status filter
     if (filter === 'pending') {
-      filtered = filtered.filter(task => task.status !== 'Terminer');
+      filtered = filtered.filter((task) => task.status !== 'Terminer');
     } else if (filter === 'completed') {
-      filtered = filtered.filter(task => task.status === 'Terminer');
+      filtered = filtered.filter((task) => task.status === 'Terminer');
     }
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(task =>
-        (task.title || '').toLowerCase().includes(query) ||
-        (task.description || '').toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (task) =>
+          (task.title || '').toLowerCase().includes(query) ||
+          (task.description || '').toLowerCase().includes(query),
       );
     }
 
@@ -139,30 +152,38 @@ const EmployeeTasksPage: React.FC = () => {
 
   const stats = useMemo(() => {
     const total = tasks.length;
-    const completed = tasks.filter(task => task.status === 'Terminer').length;
-    const pending = tasks.filter(task => task.status !== 'Terminer').length;
+    const completed = tasks.filter((task) => task.status === 'Terminer').length;
+    const pending = tasks.filter((task) => task.status !== 'Terminer').length;
     return { total, completed, pending };
   }, [tasks]);
 
   // ===== EVENT HANDLERS =====
-  const toggleTaskStatus = async (taskId: number, currentStatus: TaskStatus) => {
+  const toggleTaskStatus = async (
+    taskId: number,
+    currentStatus: TaskStatus,
+  ) => {
     setIsSubmitting(true);
     setError(null);
 
-    const newStatus: TaskStatus = currentStatus === 'Terminer' ? 'A_faire' : 'Terminer';
+    const newStatus: TaskStatus =
+      currentStatus === 'Terminer' ? 'A_faire' : 'Terminer';
 
     const result = await updateTaskStatus(taskId, newStatus);
+
     if (result.success) {
-      setTasks(prevTasks =>
-        prevTasks.map(task =>
-          task.id === taskId ? { ...task, status: newStatus } : task
-        )
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.id === taskId ? { ...task, status: newStatus } : task,
+        ),
       );
-      setSuccessMessage(`Task ${newStatus === 'Terminer' ? 'completed' : 'reopened'} successfully!`);
+      setSuccessMessage(
+        `Task ${newStatus === 'Terminer' ? 'completed' : 'reopened'} successfully!`,
+      );
       setTimeout(() => setSuccessMessage(null), 3000);
     } else {
       setError(result.message || 'Failed to update task status');
     }
+
     setIsSubmitting(false);
   };
 
@@ -170,13 +191,12 @@ const EmployeeTasksPage: React.FC = () => {
     setFilter(newFilter);
   };
 
-  const handleNewTask = () => {
-    alert('New Task modal would open here');
-  };
-
-  // ===== HELPER FUNCTIONS =====
+  // ===== HELPERS UI =====
   const getPriorityConfig = (priority: TaskPriority | undefined) => {
-    const config = {
+    const config: Record<
+      string,
+      { bg: string; text: string; icon: React.ReactNode; label: string }
+    > = {
       Elevee: {
         bg: 'bg-red-100',
         text: 'text-red-800',
@@ -196,7 +216,7 @@ const EmployeeTasksPage: React.FC = () => {
         label: 'Low',
       },
     };
-    return config[priority || 'Moyen'];
+    return config[priority || 'Moyen'] || config.Moyen;
   };
 
   const getStatusIcon = (status: TaskStatus | undefined) => {
@@ -209,50 +229,65 @@ const EmployeeTasksPage: React.FC = () => {
 
   const getStatusLabel = (status: TaskStatus | undefined) => {
     const map: Record<string, string> = {
-      'A_faire': 'Pending',
-      'En_cours': 'In Progress',
-      'Terminer': 'Completed',
+      A_faire: 'Pending',
+      En_cours: 'In Progress',
+      Terminer: 'Completed',
     };
     return map[status || 'A_faire'] || 'Pending';
   };
 
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | null) => {
     if (!dateString) return 'No date';
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return 'No date';
+
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    }
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
   };
 
-  const isOverdue = (dateString?: string) => {
+  const isOverdue = (dateString?: string | null) => {
     if (!dateString) return false;
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return date < today;
   };
 
   const getFilterButtonClasses = (filterType: FilterType) => {
-    const baseClasses =
+    const base =
       'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200';
-    const activeClasses = 'bg-[#263A81] text-white shadow-lg shadow-[#263A81]/20';
-    const inactiveClasses = 'bg-white text-[#1F2937] border border-[#E5E7EB] hover:bg-gray-50';
-    return `${baseClasses} ${filter === filterType ? activeClasses : inactiveClasses}`;
+    const active =
+      'bg-[#263A81] text-white shadow-lg shadow-[#263A81]/20';
+    const inactive =
+      'bg-white text-[#1F2937] border border-[#E5E7EB] hover:bg-gray-50';
+    return `${base} ${filter === filterType ? active : inactive}`;
   };
 
-  // ===== LOADING STATE =====
+  // ===== INFOS AFFICHAGE =====
+const employeeName =
+  (user as any)?.nom ||
+  (user as any)?.name ||
+  'Employee';
+
+const employeeInitials = employeeName
+  .trim()
+  .split(/\s+/)
+  .slice(0, 2)
+  .map((p: string) => p[0]?.toUpperCase() ?? '')
+  .join('');
+
+  // ===== LOADING =====
   if (isLoading) {
     return (
       <EmployeeLayout
@@ -260,11 +295,11 @@ const EmployeeTasksPage: React.FC = () => {
         pageSubtitle="Loading your tasks..."
         employeeName={employeeName}
         employeeInitials={employeeInitials}
-        employeeRole={employeeRole}
+        employeeRole="Employee"
       >
-        <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex min-h-[400px] items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#263A81] mx-auto mb-4"></div>
+            <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-[#263A81]" />
             <p className="text-[#6B7280]">Loading tasks...</p>
           </div>
         </div>
@@ -272,7 +307,7 @@ const EmployeeTasksPage: React.FC = () => {
     );
   }
 
-  // ===== ERROR STATE =====
+  // ===== ERROR (aucune tâche) =====
   if (error && tasks.length === 0) {
     return (
       <EmployeeLayout
@@ -280,76 +315,95 @@ const EmployeeTasksPage: React.FC = () => {
         pageSubtitle="Error loading tasks"
         employeeName={employeeName}
         employeeInitials={employeeInitials}
-        employeeRole={employeeRole}
+        employeeRole="Employee"
       >
-        <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <div className="text-red-500 text-center">
+        <div className="flex min-h-[400px] flex-col items-center justify-center">
+          <div className="text-center text-red-500">
             <p className="text-lg font-medium">Error Loading Tasks</p>
-            <p className="text-sm">{error}</p>
+            <p className="mt-1 text-sm">{error}</p>
+            <button
+              type="button"
+              onClick={() => void loadData()}
+              className="mt-4 rounded-lg bg-[#263A81] px-4 py-2 text-sm font-medium text-white hover:bg-[#1e2f6a]"
+            >
+              Réessayer
+            </button>
           </div>
         </div>
       </EmployeeLayout>
     );
   }
 
-  // ========== RENDER ==========
+  // ===== RENDER =====
   return (
     <EmployeeLayout
       pageTitle="My Tasks"
       pageSubtitle="Manage and track your assigned tasks efficiently."
-      employeeName={user?.nom || employeeName}
+      employeeName={employeeName}
       employeeInitials={employeeInitials}
-      employeeRole={user?.role === 'HOD' ? 'Head of Department' : 
-                    user?.role === 'ADMIN' ? 'Administrator' : 
-                    'Employee'}
+      employeeRole={
+        user?.role === 'HOD'
+          ? 'Head of Department'
+          : user?.role === 'ADMIN'
+            ? 'Administrator'
+            : 'Employee'
+      }
     >
       {/* Success Message */}
       {successMessage && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3 animate-fade-in">
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
           <CheckCircle size={20} className="text-green-600" />
-          <span className="text-green-800 font-medium">{successMessage}</span>
+          <span className="font-medium text-green-800">{successMessage}</span>
         </div>
       )}
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 animate-fade-in">
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
           <AlertCircle size={20} className="text-red-600" />
-          <span className="text-red-800 font-medium">{error}</span>
+          <span className="font-medium text-red-800">{error}</span>
         </div>
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-sm">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-[#6B7280]">Total Tasks</div>
-              <div className="text-2xl font-bold text-[#1F2937] mt-1">{stats.total}</div>
+              <div className="mt-1 text-2xl font-bold text-[#1F2937]">
+                {stats.total}
+              </div>
             </div>
-            <div className="p-3 bg-[#263A81]/10 rounded-lg">
+            <div className="rounded-lg bg-[#263A81]/10 p-3">
               <ListChecks size={24} className="text-[#263A81]" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-sm">
+
+        <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-[#6B7280]">Pending</div>
-              <div className="text-2xl font-bold text-[#1F2937] mt-1">{stats.pending}</div>
+              <div className="mt-1 text-2xl font-bold text-[#1F2937]">
+                {stats.pending}
+              </div>
             </div>
-            <div className="p-3 bg-amber-100 rounded-lg">
+            <div className="rounded-lg bg-amber-100 p-3">
               <Clock size={24} className="text-amber-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-sm">
+
+        <div className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-[#6B7280]">Completed</div>
-              <div className="text-2xl font-bold text-[#1F2937] mt-1">{stats.completed}</div>
+              <div className="mt-1 text-2xl font-bold text-[#1F2937]">
+                {stats.completed}
+              </div>
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
+            <div className="rounded-lg bg-green-100 p-3">
               <CheckCircle size={24} className="text-green-600" />
             </div>
           </div>
@@ -357,49 +411,56 @@ const EmployeeTasksPage: React.FC = () => {
       </div>
 
       {/* Filters & Search */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-sm mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="mb-6 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={() => handleFilterChange('all')}
               className={getFilterButtonClasses('all')}
             >
               All Tasks
             </button>
             <button
+              type="button"
               onClick={() => handleFilterChange('pending')}
               className={getFilterButtonClasses('pending')}
             >
               Pending
             </button>
             <button
+              type="button"
               onClick={() => handleFilterChange('completed')}
               className={getFilterButtonClasses('completed')}
             >
               Completed
             </button>
           </div>
+
           <div className="relative">
             <input
               type="text"
               placeholder="Search tasks..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full md:w-64 h-10 px-4 pr-10 rounded-lg border border-[#E5E7EB] bg-white text-[#1F2937] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#263A81] focus:border-transparent transition"
+              className="h-10 w-full rounded-lg border border-[#E5E7EB] bg-white px-4 pr-10 text-[#1F2937] placeholder:text-[#6B7280] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#263A81] md:w-64"
             />
-            <Filter size={18} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
+            <Filter
+              size={18}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280]"
+            />
           </div>
         </div>
       </div>
 
       {/* Task List */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white shadow-sm">
         {filteredTasks.length === 0 ? (
           <div className="p-12 text-center">
             <div className="flex flex-col items-center gap-3">
               <CheckSquare size={48} className="text-[#6B7280] opacity-30" />
-              <p className="text-[#1F2937] font-medium">No tasks found</p>
-              <p className="text-[#6B7280] text-sm">
+              <p className="font-medium text-[#1F2937]">No tasks found</p>
+              <p className="text-sm text-[#6B7280]">
                 {searchQuery
                   ? 'Try adjusting your search or filters'
                   : 'All tasks are completed or none match the current filter'}
@@ -409,33 +470,43 @@ const EmployeeTasksPage: React.FC = () => {
         ) : (
           <div className="divide-y divide-[#E5E7EB]">
             {filteredTasks.map((task) => {
-              const priorityConfig = getPriorityConfig(task.priorite);
-              const isTaskOverdue = task.status !== 'Terminer' && isOverdue(task.Date_limite);
+              const priorityConfig = getPriorityConfig(
+                (task as any).priorite || (task as any).priority,
+              );
+              const dueDate = getTaskDueDate(task);
+              const isTaskOverdue =
+                task.status !== 'Terminer' && isOverdue(dueDate);
               const isCompleted = task.status === 'Terminer';
 
               return (
                 <div
                   key={task.id}
-                  className={`p-4 hover:bg-gray-50 transition group ${
+                  className={`p-4 transition group hover:bg-gray-50 ${
                     isCompleted ? 'opacity-75' : ''
                   }`}
                 >
                   <div className="flex items-start gap-4">
                     {/* Checkbox */}
                     <button
-                      onClick={() => toggleTaskStatus(task.id!, task.status || 'A_faire')}
-                      className="mt-1 flex-shrink-0 hover:scale-110 transition-transform"
+                      type="button"
+                      onClick={() =>
+                        toggleTaskStatus(
+                          Number(task.id),
+                          (task.status as TaskStatus) || 'A_faire',
+                        )
+                      }
+                      className="mt-1 flex-shrink-0 transition-transform hover:scale-110"
                       disabled={isSubmitting}
                       aria-label={`Mark "${task.title}" as ${
                         isCompleted ? 'pending' : 'completed'
                       }`}
                     >
-                      {getStatusIcon(task.status)}
+                      {getStatusIcon(task.status as TaskStatus)}
                     </button>
 
-                    {/* Task Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                    {/* Content */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <h3
                             className={`text-base font-medium ${
@@ -447,7 +518,7 @@ const EmployeeTasksPage: React.FC = () => {
                             {task.title}
                           </h3>
                           <p
-                            className={`text-sm mt-1 ${
+                            className={`mt-1 text-sm ${
                               isCompleted
                                 ? 'text-[#6B7280] line-through'
                                 : 'text-[#6B7280]'
@@ -455,39 +526,45 @@ const EmployeeTasksPage: React.FC = () => {
                           >
                             {task.description || 'No description'}
                           </p>
-                          <div className="flex flex-wrap items-center gap-3 mt-2">
-                            <span className="text-xs text-[#6B7280] flex items-center gap-1">
+
+                          <div className="mt-2 flex flex-wrap items-center gap-3">
+                            <span className="flex items-center gap-1 text-xs text-[#6B7280]">
                               <Tag size={12} />
-                              {getStatusLabel(task.status)}
+                              {getStatusLabel(task.status as TaskStatus)}
                             </span>
-                            <span className="text-xs text-[#6B7280] flex items-center gap-1">
+                            <span className="flex items-center gap-1 text-xs text-[#6B7280]">
                               <UserIcon size={12} />
                               {user?.nom || 'You'}
                             </span>
                             <span
-                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${priorityConfig.bg} ${priorityConfig.text}`}
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${priorityConfig.bg} ${priorityConfig.text}`}
                             >
                               {priorityConfig.icon}
                               {priorityConfig.label}
                             </span>
                             {isTaskOverdue && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
                                 <AlertCircle size={12} className="mr-1" />
                                 Overdue
                               </span>
                             )}
                             {isCompleted && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
                                 <CheckCircle size={12} className="mr-1" />
                                 Done
                               </span>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-[#6B7280] whitespace-nowrap">
+
+                        <div className="flex items-center gap-2 whitespace-nowrap text-sm text-[#6B7280]">
                           <Calendar size={14} />
-                          <span className={isTaskOverdue ? 'text-red-600 font-medium' : ''}>
-                            {formatDate(task.Date_limite)}
+                          <span
+                            className={
+                              isTaskOverdue ? 'font-medium text-red-600' : ''
+                            }
+                          >
+                            {formatDate(dueDate)}
                           </span>
                         </div>
                       </div>
@@ -500,25 +577,11 @@ const EmployeeTasksPage: React.FC = () => {
         )}
       </div>
 
-      {/* Footer note */}
+      {/* Footer */}
       <div className="mt-4 text-center text-xs text-[#6B7280]">
-        {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''} displayed
+        {filteredTasks.length} task
+        {filteredTasks.length !== 1 ? 's' : ''} displayed
       </div>
-
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin { animation: spin 1s linear infinite; }
-      `}</style>
     </EmployeeLayout>
   );
-};
-
-export default EmployeeTasksPage;
+}

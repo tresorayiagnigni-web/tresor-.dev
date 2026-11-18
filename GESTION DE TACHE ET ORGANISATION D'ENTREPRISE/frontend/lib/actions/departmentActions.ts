@@ -327,40 +327,6 @@ export async function assignDepartmentHead(departmentId: number, chef_Departemen
         body: JSON.stringify({ chef_DepartementId }),
       }
     );
-    // if (!departmentId || !chef_DepartementId) {
-    //   return {
-    //     success: false,
-    //     message: 'Department ID and User ID are required',
-    //     error: 'Validation failed',
-    //   };
-    // }
-
-    // const headers = await getHeaders();
-    
-    // const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/departments/${departmentId}/assign-head`, {
-    //   method: 'PATCH',
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     Authorization: `Bearer ${await getAuthToken()}`,
-    //   },
-    //   body: JSON.stringify({ userId }),
-    // });
-    // const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-
-    //   await fetch(`${API_URL}/departements/${departmentId}`, {  // vérifie aussi le nom de la route
-    //   method: 'PATCH',  // ← pas PUT
-    //   headers: {
-    //     'Content-Type': 'application/json',
-    //     Authorization: `Bearer ${await getAuthToken()}`,
-    //   },
-    //  body: JSON.stringify({ chef_DepartementId: chef_DepartementId }),
-    // });
-
-    // const result = await handleResponse(Response);
-    
-    // if (result.success && result.data) {
-    //   result.data = normalizeDepartment(result.data);
-    // }
     
     return await handleResponse(response);
   } catch (error) {
