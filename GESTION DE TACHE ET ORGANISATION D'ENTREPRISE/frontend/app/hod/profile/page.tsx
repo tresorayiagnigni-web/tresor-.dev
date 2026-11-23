@@ -1,9 +1,9 @@
 // app/hod/profile/page.tsx
 
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import {  HODLayout } from '@/app/layout/HodLayout';
+import React, { useState, useEffect } from "react";
+import { HODLayout } from "@/app/layout/HodLayout";
 import {
   Save,
   Key,
@@ -18,9 +18,13 @@ import {
   AlertCircle,
   CheckCircle,
   LogOut as LogOutIcon,
-} from 'lucide-react';
-import { getUserById, updateUser, type User } from '@/lib/actions/userActions';
-import { getDepartmentById, type Department } from '@/lib/actions/departmentActions';
+} from "lucide-react";
+import { getUserById, updateUser, type User } from "@/lib/actions/userActions";
+import {
+  getDepartmentById,
+  type Department,
+} from "@/lib/actions/departmentActions";
+import AvatarUploader from "@/components/AvatarUploader";
 
 // ========== TYPE DEFINITIONS ==========
 interface ProfileFormData {
@@ -38,66 +42,87 @@ const HODProfilePage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccessBanner, setShowSuccessBanner] = useState<boolean>(false);
-  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string>("");
   const [showLogoutModal, setShowLogoutModal] = useState<boolean>(false);
   const [department, setDepartment] = useState<Department | null>(null);
-  
+
+  // 👇 NOUVEAU : state pour l'avatar
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
   // ========== HOD USER INFO ==========
-  // In production, this would come from auth context
   const hodUserId = 1; // Placeholder - should come from auth
   const departmentId = 1; // Placeholder - should come from auth
 
   // ========== FORM STATE ==========
   const [formData, setFormData] = useState<ProfileFormData>({
-    fullName: '',
-    email: '',
-    phoneNumber: '',
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+    fullName: "",
+    email: "",
+    phoneNumber: "",
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
 
   // ========== LOAD DATA ==========
- const loadData = async () => {
-  setIsLoading(true);
-  setError(null);
+  // ========== LOAD DATA ==========
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
 
-  try {
-    // 1. Charger l'utilisateur
-    const userResult = await getUserById(hodUserId);
-    
-    if (!userResult.success || !userResult.data) {
-      throw new Error(userResult.message || "Impossible de récupérer les informations de l'utilisateur");
-    }
-
-    const user = userResult.data;
-    setFormData(prev => ({
-      ...prev,
-      fullName: user.nom || '',
-      email: user.email || '',
-      phoneNumber: user.telephone || '',
-    }));
-
-    // 2. Charger le département (sans faire planter la page)
     try {
-      const deptResult = await getDepartmentById(departmentId);
-      if (deptResult.success && deptResult.data) {
-        setDepartment(deptResult.data);
-      } else {
-        console.warn("Département non accessible :", deptResult.message);
-        // On laisse department = null, la page continue de fonctionner
-      }
-    } catch (deptErr) {
-      console.warn("Erreur lors du chargement du département :", deptErr);
-    }
+      const userResult = await getUserById(hodUserId);
 
-  } catch (err) {
-    console.error(err);
-    setError(err instanceof Error ? err.message : 'Failed to load profile data');
-  } finally {
-    setIsLoading(false);
-  }
-};
+      if (!userResult.success || !userResult.data) {
+        throw new Error(
+          userResult.message ||
+            "Impossible de récupérer les informations de l'utilisateur",
+        );
+      }
+
+      // ========== EXTRACTION ROBUSTE ==========
+      const raw = userResult.data as any;
+
+      const user: User = raw?.data?.user ?? raw?.user ?? raw?.data ?? raw;
+
+      setCurrentUser(user);
+
+      // Récupération robuste de l'avatar
+      const avatar =
+        (user as any).avatarUrl ||
+        (user as any).avatar ||
+        (user as any).photo ||
+        (user as any).profilePicture ||
+        null;
+
+      setAvatarUrl(avatar);
+
+      setFormData((prev) => ({
+        ...prev,
+        fullName: user.nom || "",
+        email: user.email || "",
+        phoneNumber: user.telephone || "",
+      }));
+
+      try {
+        const deptResult = await getDepartmentById(departmentId);
+        if (deptResult.success && deptResult.data) {
+          setDepartment(deptResult.data);
+        } else {
+          console.warn("Département non accessible :", deptResult.message);
+        }
+      } catch (deptErr) {
+        console.warn("Erreur lors du chargement du département :", deptErr);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load profile data",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -106,7 +131,7 @@ const HODProfilePage: React.FC = () => {
   // ========== HELPER FUNCTIONS ==========
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const showSuccess = (message: string) => {
@@ -117,79 +142,80 @@ const HODProfilePage: React.FC = () => {
     }, 4000);
   };
 
+  // 👇 NOUVEAU : handler appelé quand l'avatar est mis à jour
+  const handleAvatarUpdated = (newUrl: string) => {
+    setAvatarUrl(newUrl);
+    showSuccess("Photo de profil mise à jour avec succès !");
+  };
+
   const handleSaveChanges = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
-    // Validate passwords if they are being changed
-    if (formData.newPassword || formData.currentPassword || formData.confirmPassword) {
+    if (
+      formData.newPassword ||
+      formData.currentPassword ||
+      formData.confirmPassword
+    ) {
       if (!formData.currentPassword) {
-        setError('Current password is required to change password');
+        setError("Current password is required to change password");
         setIsSubmitting(false);
         return;
       }
       if (formData.newPassword !== formData.confirmPassword) {
-        setError('New passwords do not match');
+        setError("New passwords do not match");
         setIsSubmitting(false);
         return;
       }
       if (formData.newPassword.length < 6) {
-        setError('New password must be at least 6 characters');
+        setError("New password must be at least 6 characters");
         setIsSubmitting(false);
         return;
       }
     }
 
     try {
-      // Update user profile
       const updateData: any = {
         nom: formData.fullName,
         email: formData.email,
         telephone: formData.phoneNumber,
       };
 
-      // Only include password if it's being changed
       if (formData.newPassword) {
         updateData.password = formData.newPassword;
-        // Note: Current password verification should be handled by the backend
       }
 
       const result = await updateUser(hodUserId, updateData);
-      
+
       if (result.success) {
-        showSuccess('Profile updated successfully!');
-        // Clear password fields
-        setFormData(prev => ({
+        showSuccess("Profile updated successfully!");
+        setFormData((prev) => ({
           ...prev,
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: '',
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
         }));
       } else {
-        setError(result.message || 'Failed to update profile');
+        setError(result.message || "Failed to update profile");
       }
     } catch (err) {
-      setError('An error occurred while updating profile');
+      setError("An error occurred while updating profile");
     }
 
     setIsSubmitting(false);
   };
 
-  const handleLogout = () => {
-    setShowLogoutModal(true);
-  };
+  const handleLogout = () => setShowLogoutModal(true);
 
   const confirmLogout = () => {
     setShowLogoutModal(false);
-    // Clear cookies and redirect to login
-    document.cookie = 'my_secret_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-    window.location.href = '/login';
+    document.cookie =
+      "my_secret_token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    window.location.href = "/login";
   };
 
-  const cancelLogout = () => {
-    setShowLogoutModal(false);
-  };
+  const cancelLogout = () => setShowLogoutModal(false);
 
   // ===== LOADING STATE =====
   if (isLoading) {
@@ -237,13 +263,25 @@ const HODProfilePage: React.FC = () => {
         <section className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <UserCircle size={24} className="text-[#263A81]" />
-            <h2 className="text-xl font-bold text-[#1F2937]">Personal Credentials</h2>
+            <h2 className="text-xl font-bold text-[#1F2937]">
+              Personal Credentials
+            </h2>
           </div>
+
+          {/* 👇 NOUVEAU : Zone d'upload de la photo de profil */}
+          <AvatarUploader
+            initialAvatarUrl={avatarUrl}
+            userName={formData.fullName}
+            onAvatarUpdated={handleAvatarUpdated}
+          />
 
           <form onSubmit={handleSaveChanges} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label htmlFor="fullName" className="block text-sm font-medium text-[#1F2937] mb-1">
+                <label
+                  htmlFor="fullName"
+                  className="block text-sm font-medium text-[#1F2937] mb-1"
+                >
                   Full Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -259,11 +297,17 @@ const HODProfilePage: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-[#1F2937] mb-1">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-[#1F2937] mb-1"
+                >
                   Corporate Email <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <Mail size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
+                  <Mail
+                    size={18}
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]"
+                  />
                   <input
                     type="email"
                     id="email"
@@ -279,11 +323,17 @@ const HODProfilePage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="phoneNumber" className="block text-sm font-medium text-[#1F2937] mb-1">
+              <label
+                htmlFor="phoneNumber"
+                className="block text-sm font-medium text-[#1F2937] mb-1"
+              >
                 Contact Number
               </label>
               <div className="relative">
-                <Phone size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]" />
+                <Phone
+                  size={18}
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#6B7280]"
+                />
                 <input
                   type="tel"
                   id="phoneNumber"
@@ -300,12 +350,17 @@ const HODProfilePage: React.FC = () => {
             <div className="pt-4 border-t border-[#E5E7EB]">
               <div className="flex items-center gap-3 mb-4">
                 <Lock size={20} className="text-[#263A81]" />
-                <h3 className="text-base font-semibold text-[#1F2937]">Security Account Password</h3>
+                <h3 className="text-base font-semibold text-[#1F2937]">
+                  Security Account Password
+                </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label htmlFor="currentPassword" className="block text-sm font-medium text-[#1F2937] mb-1">
+                  <label
+                    htmlFor="currentPassword"
+                    className="block text-sm font-medium text-[#1F2937] mb-1"
+                  >
                     Current Password <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -321,7 +376,10 @@ const HODProfilePage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-[#1F2937] mb-1">
+                  <label
+                    htmlFor="newPassword"
+                    className="block text-sm font-medium text-[#1F2937] mb-1"
+                  >
                     New Password
                   </label>
                   <input
@@ -337,7 +395,10 @@ const HODProfilePage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-[#1F2937] mb-1">
+                  <label
+                    htmlFor="confirmPassword"
+                    className="block text-sm font-medium text-[#1F2937] mb-1"
+                  >
                     Confirm New Password
                   </label>
                   <input
@@ -353,7 +414,8 @@ const HODProfilePage: React.FC = () => {
                 </div>
               </div>
               <p className="mt-2 text-xs text-[#6B7280]">
-                Leave password fields blank to keep current password. Current password is required to change.
+                Leave password fields blank to keep current password. Current
+                password is required to change.
               </p>
             </div>
 
@@ -383,7 +445,9 @@ const HODProfilePage: React.FC = () => {
         <section className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <Building size={24} className="text-[#263A81]" />
-            <h2 className="text-xl font-bold text-[#1F2937]">Department Metadata</h2>
+            <h2 className="text-xl font-bold text-[#1F2937]">
+              Department Metadata
+            </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -394,7 +458,7 @@ const HODProfilePage: React.FC = () => {
                 </label>
                 <p className="text-[#1F2937] font-medium mt-1 flex items-center gap-2">
                   <Building size={16} className="text-[#263A81]" />
-                  {department?.nom_departement || 'Loading...'}
+                  {department?.nom_departement || "Loading..."}
                 </p>
               </div>
 
@@ -404,7 +468,7 @@ const HODProfilePage: React.FC = () => {
                 </label>
                 <p className="text-[#1F2937] font-medium mt-1 flex items-center gap-2">
                   <Shield size={16} className="text-[#263A81]" />
-                  {department?.code || 'N/A'}
+                  {department?.code || "N/A"}
                 </p>
               </div>
 
@@ -413,7 +477,7 @@ const HODProfilePage: React.FC = () => {
                   Department Description
                 </label>
                 <p className="text-[#1F2937] font-medium mt-1">
-                  {department?.description || 'No description available'}
+                  {department?.description || "No description available"}
                 </p>
               </div>
             </div>
@@ -435,7 +499,9 @@ const HODProfilePage: React.FC = () => {
                 </label>
                 <div className="mt-1 p-3 bg-[#FEFEFC] border border-[#E5E7EB] rounded-lg">
                   <p className="text-sm text-[#1F2937]">
-                    Authorized for Personnel Offboarding, Task CRUD, and Task Allocation within {department?.nom_departement || 'your department'}.
+                    Authorized for Personnel Offboarding, Task CRUD, and Task
+                    Allocation within{" "}
+                    {department?.nom_departement || "your department"}.
                   </p>
                 </div>
               </div>
@@ -445,10 +511,14 @@ const HODProfilePage: React.FC = () => {
                   Department Status
                 </label>
                 <p className="text-[#1F2937] font-medium mt-1 flex items-center gap-2">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    department?.isActive !== false ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {department?.isActive !== false ? 'Active' : 'Inactive'}
+                  <span
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                      department?.isActive !== false
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {department?.isActive !== false ? "Active" : "Inactive"}
                   </span>
                 </p>
               </div>
@@ -460,7 +530,9 @@ const HODProfilePage: React.FC = () => {
         <section className="bg-white rounded-xl border border-[#E5E7EB] p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <Settings size={24} className="text-[#263A81]" />
-            <h2 className="text-xl font-bold text-[#1F2937]">Session Management</h2>
+            <h2 className="text-xl font-bold text-[#1F2937]">
+              Session Management
+            </h2>
           </div>
 
           <div className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 bg-red-50/50 border border-red-200 rounded-lg">
@@ -469,8 +541,12 @@ const HODProfilePage: React.FC = () => {
                 <LogOutIcon size={20} className="text-red-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-[#1F2937]">End Current Session</p>
-                <p className="text-sm text-[#6B7280]">Securely log out of your current session</p>
+                <p className="text-sm font-medium text-[#1F2937]">
+                  End Current Session
+                </p>
+                <p className="text-sm text-[#6B7280]">
+                  Securely log out of your current session
+                </p>
               </div>
             </div>
             <button
@@ -493,7 +569,9 @@ const HODProfilePage: React.FC = () => {
                 <div className="p-2 bg-red-100 rounded-lg">
                   <LogOutIcon size={24} className="text-red-600" />
                 </div>
-                <h2 className="text-xl font-bold text-[#1F2937]">Confirm Logout</h2>
+                <h2 className="text-xl font-bold text-[#1F2937]">
+                  Confirm Logout
+                </h2>
               </div>
             </div>
 
@@ -502,7 +580,8 @@ const HODProfilePage: React.FC = () => {
                 Are you sure you want to log out of your session?
               </p>
               <p className="text-sm text-[#6B7280]">
-                You will be redirected to the login page and will need to re-authenticate to access your dashboard.
+                You will be redirected to the login page and will need to
+                re-authenticate to access your dashboard.
               </p>
             </div>
 
@@ -527,20 +606,40 @@ const HODProfilePage: React.FC = () => {
 
       <style jsx>{`
         @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
         }
         @keyframes scaleIn {
-          from { transform: scale(0.9); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
+          from {
+            transform: scale(0.9);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
         }
-        .animate-fade-in { animation: fadeIn 0.2s ease-out; }
-        .animate-scale-in { animation: scaleIn 0.2s ease-out; }
+        .animate-fade-in {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-scale-in {
+          animation: scaleIn 0.2s ease-out;
+        }
         @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
         }
-        .animate-spin { animation: spin 1s linear infinite; }
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
       `}</style>
     </HODLayout>
   );

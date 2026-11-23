@@ -6,9 +6,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import { DataSource } from 'typeorm';
+import { join } from 'path';
+import { existsSync } from 'fs';
+import { unlink } from 'fs/promises';
+
 import { User } from './entities/user.entity';
 import { UserProvider } from './entities/user-provider.entity';
 import { Departments } from 'src/departement/entities/departement.entity';
@@ -17,6 +20,7 @@ import { UpdateUserDto } from './dto/update.user.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { Role } from './enums/role.enum';
+import { AVATARS_DIR } from '../config p/multer.config';
 
 @Injectable()
 export class UsersService {
@@ -56,15 +60,14 @@ export class UsersService {
     picture?: string;
     providers: { provider: string; providerId: string }[];
   }): Promise<User> {
-    // On mappe firstName + lastName → nom (selon ton modèle)
     const nom =
       [data.firstName, data.lastName].filter(Boolean).join(' ') || undefined;
 
     const user = this.userRepository.create({
       email: data.email ?? undefined,
-      nom: nom,
+      nom,
       picture: data.picture ?? undefined,
-      role: Role.EMPLOYEE, // ou Role.USER selon ton enum
+      role: Role.EMPLOYEE,
       providers: data.providers.map((p) =>
         this.userProviderRepository.create({
           provider: p.provider,
@@ -77,7 +80,7 @@ export class UsersService {
   }
 
   async linkProvider(
-    userId: number, // ← ton id est number
+    userId: number,
     data: { provider: string; providerId: string },
   ): Promise<void> {
     const existing = await this.userProviderRepository.findOne({
@@ -94,6 +97,35 @@ export class UsersService {
         providerId: data.providerId,
       });
     }
+  }
+
+  // ====================== PROFIL / AVATAR ======================
+
+  async getMe(userId: number): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    return user;
+  }
+
+  async updateAvatar(userId: number, filename: string): Promise<User> {
+    const user = await this.getMe(userId);
+
+    // Supprime l'ancienne photo si elle existe
+    if (user.avatarUrl) {
+      const oldFilename = user.avatarUrl.split('/').pop();
+      const oldPath = join(AVATARS_DIR, oldFilename ?? '');
+      if (existsSync(oldPath)) {
+        try {
+          await unlink(oldPath);
+        } catch (err) {
+          console.error('Erreur suppression ancien avatar:', err);
+        }
+      }
+    }
+
+    // Chemin relatif servi par ServeStatic
+    user.avatarUrl = `/uploads/avatars/${filename}`;
+    return this.userRepository.save(user);
   }
 
   // ====================== MÉTHODES EXISTANTES ======================
@@ -300,25 +332,25 @@ export class UsersService {
   }
 
   async remove(id: number): Promise<{ message: string }> {
-  const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({ where: { id } });
 
-  if (!user) {
-    throw new NotFoundException('Utilisateur introuvable');
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable');
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      await manager
+        .createQueryBuilder()
+        .update(Departments)
+        .set({ chef_departement: null })
+        .where('chefDepartementId = :id', { id })
+        .execute();
+
+      await manager.remove(user);
+    });
+
+    return { message: 'Utilisateur supprimé avec succès' };
   }
-
- await this.dataSource.transaction(async (manager) => {
-  await manager
-    .createQueryBuilder()
-    .update(Departments) // le nom exact de la classe exportée dans departement.entity.ts
-    .set({ chef_departement: null })
-    .where('chefDepartementId = :id', { id })
-    .execute();
-
-  await manager.remove(user);
-});
-
-  return { message: 'Utilisateur supprimé avec succès' };
-}
 
   async updateStatus(id: number, dto: UpdateStatusDto) {
     const user = await this.userRepository.findOne({ where: { id } });

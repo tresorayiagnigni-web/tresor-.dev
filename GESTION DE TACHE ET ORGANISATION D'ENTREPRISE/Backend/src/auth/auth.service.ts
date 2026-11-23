@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 // import * as bcrypt from 'bcrypt';
-import * as bcrypt from 'bcryptjs';
+import * as bcryptjs from 'bcryptjs';
 import { ConfigService } from '@nestjs/config';
 
 import { User } from '../users/entities/user.entity';
@@ -154,7 +154,7 @@ export class AuthService {
       throw new UnauthorizedException('Identifiants incorrects');
     }
 
-    const isPasswordValid = await bcrypt.compare(
+    const isPasswordValid = await bcryptjs.compare(
       dto.password!,
       user.password!,
     );
@@ -233,13 +233,13 @@ export class AuthService {
       throw new BadRequestException('Utilisateur non trouvé');
     }
 
-    const isMatch = await bcrypt.compare(dto.oldPassword!, user.password!);
+    const isMatch = await bcryptjs.compare(dto.oldPassword!, user.password!);
     if (!isMatch) {
       throw new BadRequestException('Ancien mot de passe incorrect');
     }
 
-    const salt = await bcrypt.genSalt();
-    user.password = await bcrypt.hash(dto.newPassword!, salt);
+    const salt = await bcryptjs.genSalt();
+    user.password = await bcryptjs.hash(dto.newPassword!, salt);
 
     await this.tokenService.revokeToken(userId);
     await this.usersService.save(user);

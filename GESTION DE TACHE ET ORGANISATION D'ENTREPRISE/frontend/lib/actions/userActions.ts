@@ -19,6 +19,7 @@ export interface User {
   status?: UserStatus | boolean;
   role?: UserRole;
   departementId?: number;
+   avatarUrl?: string | null;
 }
 
 export interface CreateUserInput {
@@ -252,6 +253,63 @@ export async function getUsersByRole(role: UserRole): Promise<ApiResponse<User[]
     return {
       success: false,
       message: 'Failed to fetch users by role',
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+// ========== AVATAR UPLOAD ==========
+
+export async function uploadAvatarAction(
+  formData: FormData,
+): Promise<ApiResponse<User>> {
+  try {
+    // Récupère le token côté serveur via cookies()
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        message: 'Session expirée. Reconnecte-toi.',
+        error: 'no_token',
+      };
+    }
+
+    // ⚠️ Pas de Content-Type : le navigateur/Node ajoute le boundary automatiquement
+    const headers: HeadersInit = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/users/me/avatar`,
+      {
+        method: 'POST',
+        headers,
+        body: formData,
+      },
+    );
+
+    return await handleResponse(response);
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to upload avatar',
+      error: error instanceof Error ? error.message : 'Network error',
+    };
+  }
+}
+
+export async function getCurrentUserAction(): Promise<ApiResponse<User>> {
+  try {
+    const headers = await getHeaders();
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/profile`,
+      { method: 'GET', headers, cache: 'no-store' },
+    );
+    return await handleResponse(response);
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Failed to fetch profile',
       error: error instanceof Error ? error.message : 'Network error',
     };
   }

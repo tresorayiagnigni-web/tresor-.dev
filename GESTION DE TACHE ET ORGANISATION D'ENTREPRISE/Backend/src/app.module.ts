@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config'; // Assure-toi d'utiliser @nestjs/config
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { MulterModule } from '@nestjs/platform-express';
+import { join } from 'path';
+
 import databaseConfig from './config/database.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -12,7 +16,7 @@ import { DepartementModule } from './departement/departement.module';
 import { TokenController } from './auth/token.controller';
 import { ProjectsModule } from './project/project.module';
 import { User } from './users/entities/user.entity';
-
+import { multerConfig } from './config p/multer.config';
 
 @Module({
   imports: [
@@ -21,10 +25,10 @@ import { User } from './users/entities/user.entity';
       load: [databaseConfig],
       envFilePath: '.env',
     }),
-  
+
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) =>({
+      useFactory: (configService: ConfigService) => ({
         type: 'mysql',
         host: configService.get('DB_HOST') || 'sakura.proxy.rlwy.net',
         port: Number(configService.get('DB_PORT') || 13002),
@@ -37,8 +41,30 @@ import { User } from './users/entities/user.entity';
       }),
     }),
 
-    UsersModule, AuthModule, TasksModule, AdminModule, DepartementModule, ProjectsModule
-  
+    // ✅ Sert le dossier /uploads en statique
+    // → http://localhost:4000/uploads/avatars/xxx.jpg
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+      serveStaticOptions: {
+        // Cache court pour les avatars (évite de recharger l'image à chaque fois)
+        maxAge: 1000 * 60 * 60, // 1 heure
+      },
+    }),
+
+    // ✅ Config Multer globale (utilisée par FileInterceptor dans UsersController)
+    MulterModule.register({
+      storage: multerConfig.storage,
+      limits: multerConfig.limits,
+      fileFilter: multerConfig.fileFilter,
+    }),
+
+    UsersModule,
+    AuthModule,
+    TasksModule,
+    AdminModule,
+    DepartementModule,
+    ProjectsModule,
   ],
   controllers: [AppController, TokenController],
   providers: [AppService],

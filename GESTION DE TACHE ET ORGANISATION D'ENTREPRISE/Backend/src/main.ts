@@ -6,32 +6,41 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Intercepteur global
   app.useGlobalInterceptors(new AppInterceptor());
-  // Enable CORS to allow cross-origin requests
+
+  // ✅ CORS — un seul appel, avec toutes les options
   app.enableCors({
-    origin: 'http://localhost:3000', // Adresse du frontend
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
-  app.useGlobalPipes(new ValidationPipe({whitelist: true, transform: true, forbidNonWhitelisted: true}));
-  
+  // Validation globale des DTOs
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  // Swagger
   const config = new DocumentBuilder()
-    .setTitle('Cats example')
-    .setDescription('The cats API description')
+    .setTitle('Gestion de tâches API')
+    .setDescription('API de gestion de tâches et organisation d\'entreprise')
     .setVersion('1.0')
-    .addTag('cats')
+    .addBearerAuth() // 👉 ajoute le bouton "Authorize" pour tester avec JWT
     .build();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, documentFactory);
-  // Pass '0.0.0.0' to bind the server to all network interfaces
-  await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
+  SwaggerModule.setup('api', app, SwaggerModule.createDocument(app, config));
+
+  // Lancement sur 0.0.0.0 pour permettre l'accès depuis l'extérieur (Railway, etc.)
+  const port = process.env.PORT ?? 3001;
+  await app.listen(port, '0.0.0.0');
 
   console.log(`Application is running on: ${await app.getUrl()}`);
-
-  app.enableCors({
-  origin: 'http://localhost:3000', // URL de ton frontend
-  credentials: true,
-  });
+  console.log(`Swagger:              ${await app.getUrl()}/api`);
 }
+
 bootstrap();

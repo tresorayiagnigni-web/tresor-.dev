@@ -1,30 +1,25 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { EmployeeLayout } from '@/app/layout/employeeLayout';
-import {
-  Plus,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  X,
-} from 'lucide-react';
-import { getProfile, type User } from '@/lib/actions/userActions';
-import { getTasks, type Task } from '@/lib/actions/taskActions';
+import React, { useState, useEffect, useCallback } from "react";
+import { EmployeeLayout } from "@/app/layout/employeeLayout";
+import { Plus, Clock, CheckCircle, AlertCircle, X } from "lucide-react";
+import { getProfile, type User } from "@/lib/actions/userActions";
+import { getTasks, type Task } from "@/lib/actions/taskActions";
 import {
   getDepartmentById,
   type Department,
-} from '@/lib/actions/departmentActions';
+} from "@/lib/actions/departmentActions";
+import AvatarUploader from "@/components/AvatarUploader"; // ← AJOUT
 
 // ========== TYPES ==========
-type RequestType = 'leave' | 'expense';
+type RequestType = "leave" | "expense";
 
 interface Request {
   id: string;
   date: string;
   type: string;
   details: string;
-  status: 'approved' | 'pending' | 'rejected';
+  status: "approved" | "pending" | "rejected";
 }
 
 interface FormData {
@@ -48,9 +43,9 @@ function getTaskAssigneeIds(task: any): number[] {
 
 // ========== MAIN COMPONENT ==========
 export default function EmployeeProfilePage() {
-  const [employeeName, setEmployeeName] = useState('Loading...');
-  const [employeeInitials, setEmployeeInitials] = useState('??');
-  const [employeeRole, setEmployeeRole] = useState('Loading...');
+  const [employeeName, setEmployeeName] = useState("Loading...");
+  const [employeeInitials, setEmployeeInitials] = useState("??");
+  const [employeeRole, setEmployeeRole] = useState("Loading...");
 
   const [user, setUser] = useState<User | null>(null);
   const [department, setDepartment] = useState<Department | null>(null);
@@ -60,43 +55,47 @@ export default function EmployeeProfilePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // 👇 NOUVEAU : state pour l'avatar
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<FormData>({
-    type: 'leave',
-    startDate: '',
-    endDate: '',
-    amount: '',
-    comment: '',
+    type: "leave",
+    startDate: "",
+    endDate: "",
+    amount: "",
+    comment: "",
   });
 
   // Mock requests (à remplacer plus tard par une API)
   const [requests] = useState<Request[]>([
     {
-      id: '1',
-      date: new Date().toISOString().split('T')[0],
-      type: 'Salary Advance',
-      details: 'Emergency advance - $5,000',
-      status: 'approved',
+      id: "1",
+      date: new Date().toISOString().split("T")[0],
+      type: "Salary Advance",
+      details: "Emergency advance - $5,000",
+      status: "approved",
     },
     {
-      id: '2',
-      date: new Date(Date.now() - 86400000 * 5).toISOString().split('T')[0],
-      type: 'Leave Request',
-      details: 'Annual leave - 5 days',
-      status: 'pending',
+      id: "2",
+      date: new Date(Date.now() - 86400000 * 5).toISOString().split("T")[0],
+      type: "Leave Request",
+      details: "Annual leave - 5 days",
+      status: "pending",
     },
     {
-      id: '3',
-      date: new Date(Date.now() - 86400000 * 10).toISOString().split('T')[0],
-      type: 'Expense Claim',
-      details: 'Travel reimbursement - $350',
-      status: 'approved',
+      id: "3",
+      date: new Date(Date.now() - 86400000 * 10).toISOString().split("T")[0],
+      type: "Expense Claim",
+      details: "Travel reimbursement - $350",
+      status: "approved",
     },
     {
-      id: '4',
-      date: new Date(Date.now() - 86400000 * 20).toISOString().split('T')[0],
-      type: 'Leave Request',
-      details: 'Sick leave - 2 days',
-      status: 'approved',
+      id: "4",
+      date: new Date(Date.now() - 86400000 * 20).toISOString().split("T")[0],
+      type: "Leave Request",
+      details: "Sick leave - 2 days",
+      status: "approved",
     },
   ]);
 
@@ -111,12 +110,13 @@ export default function EmployeeProfilePage() {
 
       if (!profileResult.success || !profileResult.data) {
         throw new Error(
-          profileResult.message || 'Impossible de récupérer votre profil.',
+          profileResult.message || "Impossible de récupérer votre profil.",
         );
       }
 
       const raw = profileResult.data as any;
-      const currentUser: User = raw?.data?.user ?? raw?.user ?? raw?.data ?? raw;
+      const currentUser: User =
+        raw?.data?.user ?? raw?.user ?? raw?.data ?? raw;
 
       if (currentUser.id == null) {
         throw new Error("L'identifiant de l'utilisateur est absent du profil.");
@@ -124,7 +124,18 @@ export default function EmployeeProfilePage() {
 
       setUser(currentUser);
 
-      const name = (currentUser as any).nom || (currentUser as any).name || 'Employee';
+      // 👇 Récupération robuste de l'avatar
+      const avatar =
+        (currentUser as any).avatarUrl ||
+        (currentUser as any).avatar ||
+        (currentUser as any).photo ||
+        (currentUser as any).profilePicture ||
+        null;
+
+      setAvatarUrl(avatar);
+
+      const name =
+        (currentUser as any).nom || (currentUser as any).name || "Employee";
       setEmployeeName(name);
       setEmployeeInitials(
         name
@@ -132,14 +143,14 @@ export default function EmployeeProfilePage() {
           .split(/\s+/)
           .slice(0, 2)
           .map((part: string) => part.charAt(0).toUpperCase())
-          .join(''),
+          .join(""),
       );
       setEmployeeRole(
-        currentUser.role === 'HOD'
-          ? 'Head of Department'
-          : currentUser.role === 'ADMIN'
-            ? 'Administrator'
-            : 'Employee',
+        currentUser.role === "HOD"
+          ? "Head of Department"
+          : currentUser.role === "ADMIN"
+            ? "Administrator"
+            : "Employee",
       );
 
       const currentUserId = Number(currentUser.id);
@@ -160,8 +171,8 @@ export default function EmployeeProfilePage() {
       // 3. Tâches de l'employé
       const taskResult = await getTasks();
 
-      console.log('Profil connecté :', currentUser);
-      console.log('Résultat getTasks :', taskResult);
+      console.log("Profil connecté :", currentUser);
+      console.log("Résultat getTasks :", taskResult);
 
       if (taskResult.success && Array.isArray(taskResult.data)) {
         const myTasks = (taskResult.data as any[]).filter((task) => {
@@ -173,11 +184,9 @@ export default function EmployeeProfilePage() {
         setTasks([]);
       }
     } catch (err) {
-      console.error('Erreur profil employé :', err);
+      console.error("Erreur profil employé :", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to load profile data',
+        err instanceof Error ? err.message : "Failed to load profile data",
       );
     } finally {
       setIsLoading(false);
@@ -190,31 +199,32 @@ export default function EmployeeProfilePage() {
 
   // ===== DERIVED STATE =====
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === 'Terminer').length;
-  const pendingTasks = tasks.filter((t) => t.status !== 'Terminer').length;
+  const completedTasks = tasks.filter((t) => t.status === "Terminer").length;
+  const pendingTasks = tasks.filter((t) => t.status !== "Terminer").length;
 
   const userStatus =
     (user as any)?.status === true ||
-    (user as any)?.status === 'true' ||
-    (user as any)?.status === 'ACTIVE';
+    (user as any)?.status === "true" ||
+    (user as any)?.status === "ACTIVE";
 
-  const userPhone = (user as any)?.telephone || (user as any)?.phone || 'Not provided';
+  const userPhone =
+    (user as any)?.telephone || (user as any)?.phone || "Not provided";
   const userDepartment =
     department?.nom_departement ||
-    (typeof (user as any)?.departement === 'string'
+    (typeof (user as any)?.departement === "string"
       ? (user as any).departement
       : (user as any)?.departement?.nom_departement) ||
-    'Not assigned';
-  const userEmail = user?.email || 'No email on file';
+    "Not assigned";
+  const userEmail = user?.email || "No email on file";
 
   // ===== EVENT HANDLERS =====
   const openModal = () => {
     setFormData({
-      type: 'leave',
-      startDate: '',
-      endDate: '',
-      amount: '',
-      comment: '',
+      type: "leave",
+      startDate: "",
+      endDate: "",
+      amount: "",
+      comment: "",
     });
     setIsModalOpen(true);
   };
@@ -236,43 +246,50 @@ export default function EmployeeProfilePage() {
 
     // Simulation (à remplacer par un vrai appel API plus tard)
     setTimeout(() => {
-      setSuccessMessage('Request submitted successfully!');
+      setSuccessMessage("Request submitted successfully!");
       setIsSubmitting(false);
       closeModal();
       setTimeout(() => setSuccessMessage(null), 4000);
     }, 1000);
   };
 
-  const getStatusBadge = (status: Request['status']) => {
+  // 👇 NOUVEAU : handler appelé quand l'avatar est mis à jour
+  const handleAvatarUpdated = (newUrl: string) => {
+    setAvatarUrl(newUrl);
+    setSuccessMessage("Photo de profil mise à jour avec succès !");
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
+  const getStatusBadge = (status: Request["status"]) => {
     const config = {
       approved: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
+        bg: "bg-green-100",
+        text: "text-green-800",
         icon: <CheckCircle size={14} className="mr-1" />,
-        label: 'Approved',
+        label: "Approved",
       },
       pending: {
-        bg: 'bg-yellow-100',
-        text: 'text-yellow-800',
+        bg: "bg-yellow-100",
+        text: "text-yellow-800",
         icon: <Clock size={14} className="mr-1" />,
-        label: 'Pending',
+        label: "Pending",
       },
       rejected: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
+        bg: "bg-red-100",
+        text: "text-red-800",
         icon: <AlertCircle size={14} className="mr-1" />,
-        label: 'Rejected',
+        label: "Rejected",
       },
     };
     return config[status];
   };
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -343,10 +360,13 @@ export default function EmployeeProfilePage() {
         {/* IDENTITY CARD */}
         <section className="box-border w-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
           <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
+            {/* 👇 Zone photo de profil (comme HOD) */}
             <div className="flex-shrink-0">
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[#263A81] text-3xl font-bold text-white shadow-sm md:h-32 md:w-32 md:text-4xl">
-                {employeeInitials}
-              </div>
+              <AvatarUploader
+                initialAvatarUrl={avatarUrl}
+                userName={employeeName}
+                onAvatarUpdated={handleAvatarUpdated}
+              />
             </div>
 
             <div className="grid w-full min-w-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-2">
@@ -397,11 +417,11 @@ export default function EmployeeProfilePage() {
                 <span
                   className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                     userStatus
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
                   }`}
                 >
-                  {userStatus ? 'Active' : 'Inactive'}
+                  {userStatus ? "Active" : "Inactive"}
                 </span>
               </div>
             </div>
@@ -410,18 +430,24 @@ export default function EmployeeProfilePage() {
 
         {/* TASK SUMMARY */}
         <section className="box-border w-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
-          <h2 className="mb-4 text-xl font-bold text-[#1F2937]">Task Summary</h2>
+          <h2 className="mb-4 text-xl font-bold text-[#1F2937]">
+            Task Summary
+          </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] p-4 text-center">
               <p className="text-2xl font-bold text-[#1F2937]">{totalTasks}</p>
               <p className="text-sm text-[#6B7280]">Total Tasks</p>
             </div>
             <div className="rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] p-4 text-center">
-              <p className="text-2xl font-bold text-amber-600">{pendingTasks}</p>
+              <p className="text-2xl font-bold text-amber-600">
+                {pendingTasks}
+              </p>
               <p className="text-sm text-[#6B7280]">Pending</p>
             </div>
             <div className="rounded-lg border border-[#E5E7EB] bg-[#FEFEFC] p-4 text-center">
-              <p className="text-2xl font-bold text-green-600">{completedTasks}</p>
+              <p className="text-2xl font-bold text-green-600">
+                {completedTasks}
+              </p>
               <p className="text-sm text-[#6B7280]">Completed</p>
             </div>
           </div>
@@ -431,7 +457,9 @@ export default function EmployeeProfilePage() {
         <section className="box-border w-full rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-bold text-[#1F2937]">Request Console</h2>
+              <h2 className="text-xl font-bold text-[#1F2937]">
+                Request Console
+              </h2>
               <p className="mt-1 text-sm text-[#6B7280]">
                 Submit new requests for approval
               </p>
@@ -539,11 +567,13 @@ export default function EmployeeProfilePage() {
                   disabled={isSubmitting}
                 >
                   <option value="leave">Leave Request</option>
-                  <option value="expense">Salary Advance / Expense Claim</option>
+                  <option value="expense">
+                    Salary Advance / Expense Claim
+                  </option>
                 </select>
               </div>
 
-              {formData.type === 'leave' && (
+              {formData.type === "leave" && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label
@@ -584,13 +614,14 @@ export default function EmployeeProfilePage() {
                 </div>
               )}
 
-              {formData.type === 'expense' && (
+              {formData.type === "expense" && (
                 <div>
                   <label
                     htmlFor="amount"
                     className="mb-1 block text-sm font-medium text-[#1F2937]"
                   >
-                    Requested Amount (CFA) <span className="text-red-500">*</span>
+                    Requested Amount (CFA){" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -647,7 +678,7 @@ export default function EmployeeProfilePage() {
                       Submitting...
                     </>
                   ) : (
-                    'Submit Request'
+                    "Submit Request"
                   )}
                 </button>
               </div>

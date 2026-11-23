@@ -10,6 +10,7 @@ export class AdminService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    
     @InjectRepository(Task)
     private taskRepository: Repository<Task>,
   ) {}

@@ -22,7 +22,7 @@ export class TasksService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
 
-    @InjectRepository(Project)                    // ← ajoute
+    @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
   ) {}
 

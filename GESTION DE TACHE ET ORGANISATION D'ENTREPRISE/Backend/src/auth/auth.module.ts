@@ -20,7 +20,7 @@ import { AppleStrategy } from './strategies/apple.strategy';
 @Module({
   imports: [
     UsersModule, TokenModule,
-    TypeOrmModule.forFeature([User, Token]),
+    TypeOrmModule.forFeature([User, Token]),  // ← Ajout de 'nest_db' pour spécifier la connexion à utiliser
     ConfigModule,                    // Pour utiliser ConfigService
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

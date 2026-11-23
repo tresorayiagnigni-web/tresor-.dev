@@ -1,4 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, DeleteDateColumn, OneToMany,ManyToOne, JoinColumn, UpdateDateColumn, CreateDateColumn, OneToOne } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  DeleteDateColumn,
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
+  UpdateDateColumn,
+  CreateDateColumn,
+  OneToOne,
+} from 'typeorm';
 import { Role } from '../../auth/enums/role.enum';
 import { Task } from '../../tasks/entities/task.entity';
 import { Departments } from '../../departement/entities/departement.entity';
@@ -6,10 +17,8 @@ import { Token } from '../../auth/entities/token.entity';
 import { BaseEntity } from 'src/auth/entities/baseEntity';
 import { UserProvider } from './user-provider.entity';
 
-
 @Entity('users')
 export class User extends BaseEntity {
-
   @Column()
   nom?: string;
 
@@ -20,7 +29,7 @@ export class User extends BaseEntity {
   password?: string;
 
   @ManyToOne(() => Departments, (department) => department.users, {
-    nullable: true,                     // ou false si le département est obligatoire
+    nullable: true, // ou false si le département est obligatoire
   })
   @JoinColumn({ name: 'departementId' })
   departement?: Departments;
@@ -42,6 +51,9 @@ export class User extends BaseEntity {
 
   @Column({ default: true })
   status?: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  avatarUrl?: string | null;
 
   @Column({
     type: 'enum',
