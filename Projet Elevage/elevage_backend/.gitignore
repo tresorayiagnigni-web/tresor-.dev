@@ -77,4 +77,4 @@ dist/
 *.log
 
 #database backup
-elevage_backup.sql
+elevage_backup.sql*.sql

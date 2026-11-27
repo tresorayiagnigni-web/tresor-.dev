@@ -4,9 +4,12 @@
   "main": "index.ts",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
+    "@nestjs/mapped-types": "*",
     "axios": "^1.21.1",
-    "expo": "~58.0.26",
+    "expo": "~58.1.0",
     "expo-constants": "~58.0.16",
+    "expo-font": "~58.0.12",
+    "expo-image-picker": "~58.0.10",
     "expo-linear-gradient": "~58.0.4",
     "expo-linking": "~58.0.17",
     "expo-router": "~58.0.32",

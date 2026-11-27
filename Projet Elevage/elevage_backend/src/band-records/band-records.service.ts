@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   NotFoundException,
@@ -8,12 +7,7 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  LessThanOrEqual,
-  Not,
-  DataSource,
-} from 'typeorm';
+import { Repository, LessThanOrEqual, Not, DataSource } from 'typeorm';
 
 import { BandRecord } from './entities/band-record.entity.js';
 import { Band, BandStatus } from '../bands/entities/band.entity.js';
@@ -80,9 +74,7 @@ export class BandRecordsService {
     );
 
     if (!assigned) {
-      throw new ForbiddenException(
-        'Vous ne pouvez pas accéder à cette bande.',
-      );
+      throw new ForbiddenException('Vous ne pouvez pas accéder à cette bande.');
     }
   }
 
@@ -117,23 +109,15 @@ export class BandRecordsService {
   }
 
   // CALCUL DE L'ÂGE EN JOURS
-  private calculateAgeDays(
-    startDate: string,
-    recordDate: string,
-  ): number {
+  private calculateAgeDays(startDate: string, recordDate: string): number {
     const start = this.parseDate(startDate);
     const current = this.parseDate(recordDate);
 
-    return Math.floor(
-      (current.getTime() - start.getTime()) / 86400000,
-    );
+    return Math.floor((current.getTime() - start.getTime()) / 86400000);
   }
 
   // VALIDATION DE LA DATE DU RELEVÉ
-  private validateRecordDate(
-    band: Band,
-    date: string,
-  ): number {
+  private validateRecordDate(band: Band, date: string): number {
     const startDate = this.parseDate(band.date_demarrage);
     const recordDate = this.parseDate(date);
     const today = this.getTodayDate();
@@ -150,17 +134,11 @@ export class BandRecordsService {
       );
     }
 
-    return this.calculateAgeDays(
-      band.date_demarrage,
-      date,
-    );
+    return this.calculateAgeDays(band.date_demarrage, date);
   }
 
   // VALIDATION DES TEMPÉRATURES
-  private validateTemperatures(
-    min?: number | null,
-    max?: number | null,
-  ): void {
+  private validateTemperatures(min?: number | null, max?: number | null): void {
     if (
       min !== undefined &&
       min !== null &&
@@ -191,8 +169,7 @@ export class BandRecordsService {
 
     for (const record of sortedRecords) {
       cumulativeLosses +=
-        Number(record.mortalite_jour || 0) +
-        Number(record.autres_sorties || 0);
+        Number(record.mortalite_jour || 0) + Number(record.autres_sorties || 0);
 
       if (cumulativeLosses > band.effectif_initial) {
         throw new BadRequestException(
@@ -212,17 +189,13 @@ export class BandRecordsService {
       where: {
         band: { id: band.id },
         date_releve: LessThanOrEqual(date),
-        ...(currentRecordId !== undefined
-          ? { id: Not(currentRecordId) }
-          : {}),
+        ...(currentRecordId !== undefined ? { id: Not(currentRecordId) } : {}),
       },
     });
 
     const totalLosses = records.reduce(
       (total, record) =>
-        total +
-        Number(record.mortalite_jour) +
-        Number(record.autres_sorties),
+        total + Number(record.mortalite_jour) + Number(record.autres_sorties),
       0,
     );
 
@@ -262,16 +235,11 @@ export class BandRecordsService {
       errno?: number;
     };
 
-    return (
-      dbError.code === 'ER_DUP_ENTRY' ||
-      dbError.errno === 1062
-    );
+    return dbError.code === 'ER_DUP_ENTRY' || dbError.errno === 1062;
   }
 
   // CHARGEMENT COMPLET D'UN RELEVÉ
-  private async loadCompleteRecord(
-    id: number,
-  ): Promise<BandRecord> {
+  private async loadCompleteRecord(id: number): Promise<BandRecord> {
     const record = await this.recordRepository.findOne({
       where: { id },
       relations: {
@@ -284,105 +252,103 @@ export class BandRecordsService {
     });
 
     if (!record) {
-      throw new NotFoundException(
-        'Relevé introuvable après enregistrement.',
-      );
+      throw new NotFoundException('Relevé introuvable après enregistrement.');
     }
 
     return record;
   }
 
   // CRÉATION
-  async create(
-    dto: CreateBandRecordDto,
-    authenticatedUser: AuthenticatedUser,
-  ) {
+  async create(dto: CreateBandRecordDto, authenticatedUser: AuthenticatedUser) {
     const user = await this.validateUser(authenticatedUser);
 
     let savedId: number;
 
     try {
-      savedId = await this.dataSource.transaction(
-        async (manager) => {
-          const bandRepo = manager.getRepository(Band);
-          const recordRepo = manager.getRepository(BandRecord);
+      savedId = await this.dataSource.transaction(async (manager) => {
+        const bandRepo = manager.getRepository(Band);
+        const recordRepo = manager.getRepository(BandRecord);
 
-          const lockedBand = await bandRepo.findOne({
-            where: { id: dto.bandId },
-            lock: { mode: 'pessimistic_write' },
-          });
+        const lockedBand = await bandRepo.findOne({
+          where: { id: dto.bandId },
+          lock: { mode: 'pessimistic_write' },
+        });
 
-          if (!lockedBand) {
-            throw new NotFoundException('Bande introuvable.');
-          }
+        if (!lockedBand) {
+          throw new NotFoundException('Bande introuvable.');
+        }
 
-          const band = await bandRepo.findOne({
-            where: { id: dto.bandId },
-            relations: {
-              employees: true,
-              farm: true,
-            },
-          });
+        const band = await bandRepo.findOne({
+          where: { id: dto.bandId },
+          relations: {
+            employees: true,
+            farm: true,
+          },
+        });
 
-          if (!band) {
-            throw new NotFoundException('Bande introuvable.');
-          }
+        if (!band) {
+          throw new NotFoundException('Bande introuvable.');
+        }
 
-          if (band.status !== BandStatus.GROWING) {
-            throw new BadRequestException(
-              'Cette bande ne reçoit plus de nouveaux relevés.',
-            );
-          }
-
-          this.checkBandAccess(band, user);
-          this.validateRecordDate(band, dto.date_releve);
-
-          const existing = await recordRepo.findOne({
-            where: {
-              band: { id: band.id },
-              date_releve: dto.date_releve,
-            },
-          });
-
-          if (existing) {
-            throw new ConflictException(
-              'Un relevé existe déjà pour cette bande à cette date.',
-            );
-          }
-
-          this.validateTemperatures(
-            dto.temperature_min_c,
-            dto.temperature_max_c,
+        if (band.status !== BandStatus.GROWING) {
+          throw new BadRequestException(
+            'Cette bande ne reçoit plus de nouveaux relevés.',
           );
+        }
 
-          const records = await recordRepo.find({
-            where: { band: { id: band.id } },
-          });
+        this.checkBandAccess(band, user);
+        this.validateRecordDate(band, dto.date_releve);
 
-          this.validateChronologicalLosses(band, [
-            ...records,
-            {
-              date_releve: dto.date_releve,
-              mortalite_jour: dto.mortalite_jour ?? 0,
-              autres_sorties: dto.autres_sorties ?? 0,
-            },
-          ]);
+        const existing = await recordRepo.findOne({
+          where: {
+            band: { id: band.id },
+            date_releve: dto.date_releve,
+          },
+        });
 
-          const { bandId, ...recordData } = dto;
+        if (existing) {
+          throw new ConflictException(
+            'Un relevé existe déjà pour cette bande à cette date.',
+          );
+        }
 
-          const record = recordRepo.create({
-            ...recordData,
+        this.validateTemperatures(dto.temperature_min_c, dto.temperature_max_c);
+
+        const records = await recordRepo.find({
+          where: { band: { id: band.id } },
+        });
+
+        this.validateChronologicalLosses(band, [
+          ...records,
+          {
+            date_releve: dto.date_releve,
             mortalite_jour: dto.mortalite_jour ?? 0,
             autres_sorties: dto.autres_sorties ?? 0,
-            band,
-            createdBy: user,
-          });
+          },
+        ]);
 
-          const saved = await recordRepo.save(record);
+        const { bandId, ...recordData } = dto;
 
-          return saved.id;
-        },
-      );
+        // Conversion automatique : 1 sac = 50 kg
+        const nombreSacs = Number(dto.nombre_sacs) || 0;
+
+        const quantiteAlimentKg =
+          nombreSacs > 0 ? Math.round(nombreSacs * 50 * 100) / 100 : 0;
+
+        const record = recordRepo.create({
+          ...recordData,
+          nombre_sacs: nombreSacs,
+          quantite_aliment_kg: quantiteAlimentKg,
+          mortalite_jour: dto.mortalite_jour ?? 0,
+          autres_sorties: dto.autres_sorties ?? 0,
+          band,
+          createdBy: user,
+        });
+
+        const saved = await recordRepo.save(record);
+
+        return saved.id;
+      });
     } catch (error) {
       if (this.isDuplicateEntry(error)) {
         throw new ConflictException(
@@ -419,16 +385,11 @@ export class BandRecordsService {
       },
     });
 
-    return Promise.all(
-      records.map((record) => this.enrichRecord(record)),
-    );
+    return Promise.all(records.map((record) => this.enrichRecord(record)));
   }
 
   // UN SEUL RELEVÉ
-  async findOne(
-    id: number,
-    authenticatedUser: AuthenticatedUser,
-  ) {
+  async findOne(id: number, authenticatedUser: AuthenticatedUser) {
     const user = await this.validateUser(authenticatedUser);
 
     const record = await this.recordRepository.findOne({
@@ -462,105 +423,98 @@ export class BandRecordsService {
     let savedId: number;
 
     try {
-      savedId = await this.dataSource.transaction(
-        async (manager) => {
-          const bandRepo = manager.getRepository(Band);
-          const recordRepo = manager.getRepository(BandRecord);
+      savedId = await this.dataSource.transaction(async (manager) => {
+        const bandRepo = manager.getRepository(Band);
+        const recordRepo = manager.getRepository(BandRecord);
 
-          const snapshot = await recordRepo.findOne({
-            where: { id },
-            relations: { band: true },
-          });
+        const snapshot = await recordRepo.findOne({
+          where: { id },
+          relations: { band: true },
+        });
 
-          if (!snapshot) {
-            throw new NotFoundException('Relevé introuvable.');
-          }
+        if (!snapshot) {
+          throw new NotFoundException('Relevé introuvable.');
+        }
 
-          const bandId = snapshot.band.id;
+        const bandId = snapshot.band.id;
 
-          const lockedBand = await bandRepo.findOne({
-            where: { id: bandId },
-            lock: { mode: 'pessimistic_write' },
-          });
+        const lockedBand = await bandRepo.findOne({
+          where: { id: bandId },
+          lock: { mode: 'pessimistic_write' },
+        });
 
-          if (!lockedBand) {
-            throw new NotFoundException('Bande introuvable.');
-          }
+        if (!lockedBand) {
+          throw new NotFoundException('Bande introuvable.');
+        }
 
-          const record = await recordRepo.findOne({
-            where: { id },
-            relations: { band: true },
-          });
+        const record = await recordRepo.findOne({
+          where: { id },
+          relations: { band: true },
+        });
 
-          if (!record) {
-            throw new NotFoundException('Relevé introuvable.');
-          }
+        if (!record) {
+          throw new NotFoundException('Relevé introuvable.');
+        }
 
-          const band = await bandRepo.findOne({
-            where: { id: bandId },
-            relations: {
-              employees: true,
-              farm: true,
-            },
-          });
+        const band = await bandRepo.findOne({
+          where: { id: bandId },
+          relations: {
+            employees: true,
+            farm: true,
+          },
+        });
 
-          if (!band) {
-            throw new NotFoundException('Bande introuvable.');
-          }
+        if (!band) {
+          throw new NotFoundException('Bande introuvable.');
+        }
 
-          const newDate = dto.date_releve ?? record.date_releve;
+        const newDate = dto.date_releve ?? record.date_releve;
 
-          this.validateRecordDate(band, newDate);
+        this.validateRecordDate(band, newDate);
 
-          const duplicate = await recordRepo.findOne({
-            where: {
-              band: { id: band.id },
-              date_releve: newDate,
-              id: Not(record.id),
-            },
-          });
-
-          if (duplicate) {
-            throw new ConflictException(
-              'Un relevé existe déjà pour cette bande à cette date.',
-            );
-          }
-
-          const minTemperature =
-            dto.temperature_min_c ?? record.temperature_min_c;
-
-          const maxTemperature =
-            dto.temperature_max_c ?? record.temperature_max_c;
-
-          this.validateTemperatures(
-            minTemperature,
-            maxTemperature,
-          );
-
-          const records = await recordRepo.find({
-            where: { band: { id: band.id } },
-          });
-
-          const candidate = {
+        const duplicate = await recordRepo.findOne({
+          where: {
+            band: { id: band.id },
             date_releve: newDate,
-            mortalite_jour:
-              dto.mortalite_jour ?? record.mortalite_jour,
-            autres_sorties:
-              dto.autres_sorties ?? record.autres_sorties,
-          };
+            id: Not(record.id),
+          },
+        });
 
-          this.validateChronologicalLosses(band, [
-            ...records.filter((item) => item.id !== record.id),
-            candidate,
-          ]);
+        if (duplicate) {
+          throw new ConflictException(
+            'Un relevé existe déjà pour cette bande à cette date.',
+          );
+        }
 
-          Object.assign(record, dto);
+        const minTemperature =
+          dto.temperature_min_c ?? record.temperature_min_c;
 
-          await recordRepo.save(record);
+        const maxTemperature =
+          dto.temperature_max_c ?? record.temperature_max_c;
 
-          return record.id;
-        },
-      );
+        this.validateTemperatures(minTemperature, maxTemperature);
+
+        const records = await recordRepo.find({
+          where: { band: { id: band.id } },
+        });
+
+        const candidate = {
+          date_releve: newDate,
+          mortalite_jour: dto.mortalite_jour ?? record.mortalite_jour,
+          autres_sorties: dto.autres_sorties ?? record.autres_sorties,
+        };
+
+        this.validateChronologicalLosses(band, [
+          ...records.filter((item) => item.id !== record.id),
+          candidate,
+        ]);
+
+        Object.assign(record, dto);
+
+        await recordRepo.save(record);
+
+        return record.id;
+      });
     } catch (error) {
       if (this.isDuplicateEntry(error)) {
         throw new ConflictException(
@@ -577,10 +531,7 @@ export class BandRecordsService {
   }
 
   // SUPPRESSION ADMIN
-  async remove(
-    id: number,
-    authenticatedUser: AuthenticatedUser,
-  ) {
+  async remove(id: number, authenticatedUser: AuthenticatedUser) {
     await this.validateAdmin(authenticatedUser);
 
     await this.dataSource.transaction(async (manager) => {

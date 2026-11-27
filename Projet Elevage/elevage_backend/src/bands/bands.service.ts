@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   NotFoundException,
@@ -56,10 +55,7 @@ export class BandsService {
   }
 
   // Vérifier l'accès à une bande
-  private checkBandAccess(
-    band: Band,
-    user: User,
-  ): void {
+  private checkBandAccess(band: Band, user: User): void {
     if (user.role === UserRole.ADMIN) {
       return;
     }
@@ -69,9 +65,7 @@ export class BandsService {
     );
 
     if (!assigned) {
-      throw new ForbiddenException(
-        'Vous ne pouvez pas accéder à cette bande.',
-      );
+      throw new ForbiddenException('Vous ne pouvez pas accéder à cette bande.');
     }
   }
 
@@ -82,34 +76,74 @@ export class BandsService {
     });
 
     if (!farm || !farm.status) {
-      throw new NotFoundException(
-        'Exploitation introuvable ou inactive.',
-      );
+      throw new NotFoundException('Exploitation introuvable ou inactive.');
     }
 
     return farm;
   }
 
-  // Vérifier les employés affectés à la bande
+  // Vérifier les employés et leur appartenance à une seule ferme
   private async validateEmployees(
     employeeIds: number[],
+    farmId: number,
+    excludedBandId?: number,
   ): Promise<User[]> {
-    if (employeeIds.length === 0) {
+    const uniqueIds = [...new Set(employeeIds)];
+
+    if (uniqueIds.length !== employeeIds.length) {
+      throw new BadRequestException(
+        'La liste contient des employés en double.',
+      );
+    }
+
+    if (uniqueIds.length === 0) {
       return [];
     }
 
+    // Vérifier que les employés existent et sont actifs
     const employees = await this.userRepository.find({
       where: {
-        id: In(employeeIds),
+        id: In(uniqueIds),
         role: UserRole.EMPLOYEE,
         status: true,
       },
     });
 
-    if (employees.length !== employeeIds.length) {
+    if (employees.length !== uniqueIds.length) {
       throw new BadRequestException(
         'Un ou plusieurs employés sont introuvables ou inactifs.',
       );
+    }
+
+    // Charger les autres bandes et leurs exploitations
+    const otherBands = await this.bandRepository.find({
+      relations: {
+        farm: true,
+        employees: true,
+      },
+    });
+
+    // Rechercher les affectations dans une autre exploitation
+    for (const employee of employees) {
+      const conflictingBand = otherBands.find((band) => {
+        // Ne pas comparer la bande en cours de modification
+        if (excludedBandId !== undefined && band.id === excludedBandId) {
+          return false;
+        }
+
+        const assigned = band.employees?.some(
+          (assignedEmployee) => assignedEmployee.id === employee.id,
+        );
+
+        return assigned && band.farm.id !== farmId;
+      });
+
+      if (conflictingBand) {
+        throw new BadRequestException(
+          `L'employé ${employee.nom} est déjà affecté à une autre exploitation. ` +
+            'Un employé ne peut appartenir qu’à une seule exploitation.',
+        );
+      }
     }
 
     return employees;
@@ -121,13 +155,10 @@ export class BandsService {
 
     const employees = await this.validateEmployees(
       dto.employeeIds ?? [],
+      farm.id,
     );
 
-    const {
-      farmId,
-      employeeIds,
-      ...bandData
-    } = dto;
+    const { farmId, employeeIds, ...bandData } = dto;
 
     const band = this.bandRepository.create({
       ...bandData,
@@ -140,9 +171,7 @@ export class BandsService {
   }
 
   // Récupérer les bandes accessibles
-  async findAll(
-    authenticatedUser: AuthenticatedUser,
-  ): Promise<Band[]> {
+  async findAll(authenticatedUser: AuthenticatedUser): Promise<Band[]> {
     const user = await this.validateUser(authenticatedUser);
 
     return this.bandRepository.find({
@@ -191,26 +220,30 @@ export class BandsService {
   }
 
   // Modifier une bande
-  async update(
-    id: number,
-    dto: UpdateBandDto,
-  ): Promise<Band> {
+  async update(id: number, dto: UpdateBandDto): Promise<Band> {
     const band = await this.findOneForAdminOperation(id);
 
-    const {
-      farmId,
-      employeeIds,
-      status,
-      ...bandData
-    } = dto;
+    const { farmId, employeeIds, status, ...bandData } = dto;
 
-    if (farmId !== undefined) {
-      band.farm = await this.validateFarm(farmId);
-    }
+    // Déterminer la ferme cible
+    const targetFarm =
+      farmId !== undefined ? await this.validateFarm(farmId) : band.farm;
 
-    if (employeeIds !== undefined) {
-      band.employees = await this.validateEmployees(employeeIds);
-    }
+    // Conserver les employés existants si employeeIds n'est pas fourni
+    const targetEmployeeIds =
+      employeeIds !== undefined
+        ? employeeIds
+        : band.employees.map((employee) => employee.id);
+
+    // Vérifier toutes les affectations dans la ferme cible
+    const employees = await this.validateEmployees(
+      targetEmployeeIds,
+      targetFarm.id,
+      band.id,
+    );
+
+    band.farm = targetFarm;
+    band.employees = employees;
 
     Object.assign(band, bandData);
 
@@ -222,9 +255,7 @@ export class BandsService {
   }
 
   // Chargement interne pour les opérations ADMIN
-  private async findOneForAdminOperation(
-    id: number,
-  ): Promise<Band> {
+  private async findOneForAdminOperation(id: number): Promise<Band> {
     const band = await this.bandRepository.findOne({
       where: { id },
       relations: {

@@ -21,6 +21,7 @@ import { BandsModule } from './bands/bands.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { BandRecordsModule } from './band-records/band-records.module.js';
+import { SettingsModule } from './settings/settings.module.js';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { BandRecordsModule } from './band-records/band-records.module.js';
     FarmsModule,
     BandsModule,
     BandRecordsModule,
+    SettingsModule,
   ],
 
   controllers: [AppController],

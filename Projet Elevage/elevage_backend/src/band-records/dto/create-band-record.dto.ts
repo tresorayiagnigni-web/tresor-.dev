@@ -1,4 +1,3 @@
-
 import { Type } from 'class-transformer';
 import {
   IsDateString,
@@ -6,7 +5,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsNotEmpty,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -32,6 +30,13 @@ export class CreateBandRecordDto {
   @IsInt()
   @Min(0)
   autres_sorties?: number;
+
+  // Production quotidienne d'alvéoles
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  alveoles_collectees?: number;
 
   // Pesée facultative
   @IsOptional()
@@ -83,7 +88,7 @@ export class CreateBandRecordDto {
 
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   nombre_sacs?: number;
 
@@ -126,4 +131,3 @@ export class CreateBandRecordDto {
   @MaxLength(500)
   photoUrl?: string;
 }
-

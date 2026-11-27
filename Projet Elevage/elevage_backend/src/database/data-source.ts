@@ -14,7 +14,7 @@ const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_DATABASE || 'elevage_db',
 
-  entities: [],
+  entities: ['dist/**/*.entity.js'],
 
   migrations: ['dist/database/migrations/*.js'],
 
